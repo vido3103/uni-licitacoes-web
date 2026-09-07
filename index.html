@@ -1,51 +1,16 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>UNI Licitações — Radar Operacional</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UNI Licitações — Painel Operacional</title><link rel="stylesheet" href="styles.css"></head>
 <body>
-  <header class="topbar">
-    <div><div class="brand">UNI Licitações</div><div class="subtitle">Radar Operacional — OD-009</div></div>
-    <div class="client-pill" id="clientLabel">AMBIENTE NÃO AUTENTICADO</div>
-  </header>
-  <main>
-    <section class="panel auth-panel" id="authPanel">
-      <h2>Acesso ao ambiente real</h2>
-      <p>Entre com um usuário já cadastrado no UNI Licitações. O próprio banco aplica o isolamento entre clientes.</p>
-      <form id="loginForm" class="login-form">
-        <input id="email" type="email" placeholder="E-mail" autocomplete="username" required />
-        <input id="password" type="password" placeholder="Senha" autocomplete="current-password" required />
-        <button type="submit">Entrar</button>
-        <button type="button" class="secondary" id="demoBtn">Ver demonstração</button>
-      </form>
-      <div class="status-line" id="authStatus"></div>
-    </section>
-
-    <section id="dashboard" hidden>
-      <section class="notice"><strong id="modeTitle">Ambiente</strong><span id="modeText"></span><button class="link-btn" id="logoutBtn" type="button">Sair</button></section>
-      <section class="cards">
-        <article class="card"><span>Oportunidades ativas</span><strong id="liveCount">0</strong></article>
-        <article class="card"><span>Liberadas para participação</span><strong id="releasedCount">0</strong></article>
-        <article class="card"><span>Histórico</span><strong id="historicalCount">0</strong></article>
-        <article class="card"><span>Pendências bloqueadoras</span><strong id="blockingCount">0</strong></article>
-      </section>
-      <section class="panel">
-        <div class="panel-head">
-          <div><h2>Oportunidades do Radar</h2><p>O histórico alimenta inteligência de mercado, mas não libera participação.</p></div>
-          <select id="filter"><option value="live">Ativas</option><option value="historical">Históricas</option><option value="unknown">Indeterminadas</option><option value="all">Todas</option></select>
-        </div>
-        <div class="table-wrap"><table><thead><tr><th>Processo</th><th>Objeto</th><th>Órgão</th><th>UF</th><th>Prazo</th><th>Status</th><th>Participação</th></tr></thead><tbody id="rows"></tbody></table></div>
-      </section>
-      <section class="grid">
-        <section class="panel"><h2>Mercado Público Demandante — 12 meses</h2><div id="market"></div></section>
-        <section class="panel"><h2>Central de Pendências</h2><div class="pending" id="pendingBox"></div></section>
-      </section>
-    </section>
-  </main>
-  <script src="app.js"></script>
-</body>
-</html>
+<header class="topbar"><div><div class="brand">UNI Licitações</div><div class="subtitle">Painel Operacional · MVP</div></div><div class="client-pill" id="clientLabel">AMBIENTE NÃO AUTENTICADO</div></header>
+<main>
+<section class="panel auth-panel" id="authPanel"><h2>Acesso ao ambiente real</h2><p>Entre com seu usuário do UNI Licitações. Os dados são isolados por cliente.</p><form id="loginForm" class="login-form"><input id="email" type="email" placeholder="E-mail" autocomplete="username" required><input id="password" type="password" placeholder="Senha" autocomplete="current-password" required><button type="submit">Entrar</button><button type="button" class="secondary" id="demoBtn">Ver demonstração</button></form><div class="status-line" id="authStatus"></div></section>
+<section id="dashboard" hidden>
+<section class="notice"><strong id="modeTitle">Ambiente</strong><span id="modeText"></span><button class="link-btn" id="logoutBtn" type="button">Sair</button></section>
+<nav class="module-nav"><a href="#radar">Radar</a><a href="#gates">Gates e Habilitação</a><a href="#mercado">Mercado</a><a href="#pendencias">Pendências</a></nav>
+<section class="cards"><article class="card"><span>Oportunidades ativas</span><strong id="liveCount">0</strong></article><article class="card"><span>Liberadas para participação</span><strong id="releasedCount">0</strong></article><article class="card"><span>Histórico</span><strong id="historicalCount">0</strong></article><article class="card"><span>Pendências bloqueadoras</span><strong id="blockingCount">0</strong></article></section>
+<section class="panel" id="gates"><div class="panel-head"><div><h2>Gates e Habilitação</h2><p>Monitoramento e participação são estados independentes. Uma oportunidade só é liberada quando os Gates aplicáveis estiverem satisfeitos.</p></div><span class="badge" id="participationState">MONITORAMENTO</span></div><div class="gate-grid"><div><span>Gate documental</span><strong id="gateDocumental">Pendente</strong></div><div><span>Compatibilidade comercial</span><strong id="gateCommercial">Em preparação</strong></div><div><span>Conformidade técnica</span><strong id="gateTechnical">Análise por oportunidade</strong></div><div><span>Fornecimento / logística</span><strong id="gateLogistics">Análise por oportunidade</strong></div><div><span>Econômico-financeiro</span><strong id="gateEconomic">Análise por oportunidade</strong></div></div></section>
+<section class="panel" id="radar"><div class="panel-head"><div><h2>Radar de Oportunidades</h2><p>O histórico alimenta inteligência de mercado, mas não libera participação.</p></div><select id="filter"><option value="live">Ativas</option><option value="historical">Históricas</option><option value="unknown">Indeterminadas</option><option value="all">Todas</option></select></div><div class="table-wrap"><table><thead><tr><th>Processo</th><th>Objeto</th><th>Órgão</th><th>UF</th><th>Prazo</th><th>Status</th><th>Participação</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+<section class="grid"><section class="panel" id="mercado"><h2 id="marketTitle">Mercado Público Demandante</h2><p class="section-note" id="historyNote">Período histórico conforme configuração do cliente.</p><div id="market"></div></section><section class="panel" id="pendencias"><h2>Central de Pendências</h2><div class="pending" id="pendingBox"></div></section></section>
+<section class="panel"><h2>Status da integração PNCP</h2><div id="pncpStatus" class="integration-status">Aguardando dados do ambiente...</div></section>
+</section></main><script src="app.js"></script></body></html>
