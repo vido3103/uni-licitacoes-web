@@ -4,7 +4,7 @@
 
 **MVP: IMPLEMENTADO → TESTADO → REVISADO → AUDITADO → VALIDADO → FECHADO COM RESSALVAS OPERACIONAIS.**
 
-O fechamento do MVP comprova a arquitetura multi-cliente, autenticação real, isolamento por cliente, onboarding, documentação/habilitação, readiness, Radar, ingestão PNCP, histórico/lifecycle, dashboard e configuração operacional da Luvi. Fechamento de MVP não equivale a liberação automática da Luvi para participar de licitações: os Gates documentais e comerciais continuam soberanos.
+O fechamento do MVP comprova a arquitetura multi-cliente, autenticação real, isolamento por cliente, onboarding, documentação/habilitação, readiness, Radar, ingestão multifuente, histórico/lifecycle, dashboard e configuração operacional da Luvi. Fechamento de MVP não equivale a liberação automática da Luvi para participar de licitações: os Gates documentais e comerciais continuam soberanos.
 
 ## OD-009 — Dashboard e Interface Operacional do Radar
 
@@ -20,7 +20,7 @@ Entregas: interface responsiva publicada no GitHub Pages, Radar com filtros por 
 - `od010-auth` autentica sem publicar chave administrativa no front-end.
 - `od010-dashboard` valida a sessão, resolve o cliente por `client_members` e não aceita `client_id` arbitrário do navegador.
 - Smoke test real de login da Luvi concluído.
-- Dashboard v2 usa `supabase-js` 2.57.4 fixado e reporta dinamicamente a meta/status da carga histórica, removendo o caveat hardcoded de 12 meses.
+- Dashboard reporta dinamicamente a meta e o status da carga histórica.
 
 ## OD-011 — Configuração Operacional Real da Luvi
 
@@ -33,37 +33,39 @@ Entregas: interface responsiva publicada no GitHub Pages, Radar com filtros por 
 - Termos de Radar: empilhadeiras/paleteiras, peças de empilhadeiras, linha automotiva, filtros, lubrificantes, baterias, elétrica e hidráulica; serviços de manutenção excluídos.
 - Pendências de habilitação permanecem bloqueadoras da participação.
 
-## OD-012 — PNCP real e validação do Radar
+## OD-012 — Ingestão oficial e validação do Radar
 
-**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA PARA MVP → FECHADA COM RESSALVA.**
+**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA PARA MVP → FECHADA COM RESSALVA DE COMPLETUDE HISTÓRICA.**
 
-### Critério aprovado para a Luvi
+### Critério vigente
 
-A exceção operacional da Luvi foi alterada de 12 meses para **30 dias (1 mês)** para acelerar o fechamento do MVP. A regra de produto para novos clientes permanece com histórico inicial de até 12 meses após o cadastro, conforme implementação definitiva do onboarding/coletor.
+A exceção temporária de **30 dias (1 mês)** da Luvi foi **REVOGADA em 07/09/2026**. A Luvi volta a seguir a regra estrutural do UNI: **12 meses de histórico inicial**, construídos e validados mês a mês. Os dois enrollments operacionais da Luvi foram atualizados no banco para `initial_history_months = 12`.
+
+Nenhum dado já coletado será descartado. O acervo existente passa a compor os 12 meses e a deduplicação evita regravações desnecessárias. Após a carga histórica, o modelo permanece incremental, preservando indefinidamente os registros anteriores.
 
 ### Evidência real
 
-- Fonte PNCP ativa no banco.
-- Coletor `od012-pncp-collector` ativo, protegido por JWT, com dependência `supabase-js` fixada.
-- Registros PNCP reais de SP validados contra o portal oficial, incluindo peças automotivas em Itapetininga/SP e item de empilhadeira elétrica do Metrô/SP.
-- Deduplicação por `source_external_id` + hash e RPC de upsert validadas na arquitetura.
+- Fontes PNCP, Compras.gov.br e CPTM presentes na arquitetura multifuente.
+- PNCP possui dados reais persistidos e cadeia de auditoria; falhas/timeouts não são convertidos em falsa conclusão.
+- Compras.gov.br possui coletor com autenticação interna pela chave moderna `uni_automation`, persistência real, hash/deduplicação e paginação controlada.
+- Teste de paginação do Compras.gov.br confirmou chamadas unitárias de 500 registros com `next_page`, evitando timeout de execuções longas.
+- Deduplicação por identidade oficial da fonte + hash preservada.
 - Pré-filtro geográfico/deadline e estado `monitor_only` validados; nenhuma oportunidade foi indevidamente liberada para participação.
-- Uma função temporária de backfill foi criada durante o teste, não foi usada como endpoint operacional permanente e foi imediatamente fechada, retornando `410 job_closed` e exigindo JWT na versão final.
 
-### Ressalva da carga histórica
+### Regra de completude
 
-A execução automatizada integral dos 30 dias não pôde ser disparada pelo canal administrativo usado nesta auditoria porque chamadas HTTP assíncronas do banco para a Edge Function foram bloqueadas pelo controle de segurança da ferramenta. Por integridade de auditoria, `initial_load_status` permanece `pending`; ele **não foi falsamente promovido para `completed`**. Isso não invalida a arquitetura nem o teste real do Radar, mas a primeira execução integral do backfill continua como tarefa operacional pós-MVP.
+`initial_load_status` deve permanecer `pending`/`in_progress` até que a cadeia de evidências comprove a conclusão das janelas mensais exigidas. Volume de registros armazenados, isoladamente, não autoriza promoção para `completed`.
 
 ## Auditoria final do MVP
 
 ### Segurança
 
-Auditoria Supabase executada após as alterações finais. Não foi identificado alerta crítico. Permanecem avisos conhecidos:
+Auditoria Supabase executada após as alterações. Não foi identificado alerta crítico. Permanecem avisos conhecidos:
 
 1. Tabelas backend-only de ingestão com RLS habilitado e sem policy de usuário — desenho intencional para acesso via backend/service role.
-2. `create_client_with_owner` e `is_client_member` são `SECURITY DEFINER`; precisam permanecer sob revisão de privilégio antes de produção em escala. A primeira atende ao fluxo de onboarding e a segunda participa da autorização/RLS existente.
-3. Proteção de senha vazada do Supabase Auth ainda desativada — ação recomendada antes de produção pública.
-4. Há FKs sem índices e policies permissivas redundantes apontadas pelo advisor de performance; são dívida de otimização, não bloqueador funcional do MVP.
+2. `create_client_with_owner` e `is_client_member` são `SECURITY DEFINER`; permanecem sob revisão de privilégio antes de produção em escala.
+3. Proteção de senha vazada do Supabase Auth ainda desativada — recomendada antes de produção pública.
+4. FKs sem índices e policies permissivas redundantes apontadas pelo advisor de performance permanecem como dívida de otimização.
 
 ### Gates preservados
 
@@ -71,4 +73,4 @@ A Luvi permanece em monitoramento e **não está liberada para participação au
 
 ## Fechamento
 
-O MVP está formalmente fechado **com ressalvas operacionais explícitas**, sem ocultar pendências. Próxima fase é produção controlada: executar o backfill inicial da Luvi, migrar/validar o acervo documental, habilitar proteção de senha vazada, otimizar índices/policies e realizar o smoke test final de operação com sessão autenticada quando necessário.
+O MVP permanece formalmente fechado **com ressalva operacional de completude histórica**, agora sob a regra definitiva de **12 meses também para a Luvi**. A produção controlada deve completar as janelas mensais com evidência, preservar a ingestão incremental e concluir as pendências documentais/Gates antes da participação.
