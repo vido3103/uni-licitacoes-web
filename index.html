@@ -5,30 +5,45 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>UNI Licitações — Radar Operacional</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <header class="topbar">
     <div><div class="brand">UNI Licitações</div><div class="subtitle">Radar Operacional — OD-009</div></div>
-    <div class="client-pill">CLIENTE TESTE — EMPRESA DEMONSTRAÇÃO</div>
+    <div class="client-pill" id="clientLabel">AMBIENTE NÃO AUTENTICADO</div>
   </header>
   <main>
-    <section class="notice"><strong>Protótipo demonstrativo</strong><span>Interface validada com dados fictícios. A integração autenticada com o Supabase será feita na próxima evolução.</span></section>
-    <section class="cards">
-      <article class="card"><span>Oportunidades ativas</span><strong>3</strong></article>
-      <article class="card"><span>Liberadas para participação</span><strong>1</strong></article>
-      <article class="card"><span>Histórico</span><strong>18</strong></article>
-      <article class="card"><span>Pendências bloqueadoras</span><strong>1</strong></article>
+    <section class="panel auth-panel" id="authPanel">
+      <h2>Acesso ao ambiente real</h2>
+      <p>Entre com um usuário já cadastrado no UNI Licitações. O próprio banco aplica o isolamento entre clientes.</p>
+      <form id="loginForm" class="login-form">
+        <input id="email" type="email" placeholder="E-mail" autocomplete="username" required />
+        <input id="password" type="password" placeholder="Senha" autocomplete="current-password" required />
+        <button type="submit">Entrar</button>
+        <button type="button" class="secondary" id="demoBtn">Ver demonstração</button>
+      </form>
+      <div class="status-line" id="authStatus"></div>
     </section>
-    <section class="panel">
-      <div class="panel-head">
-        <div><h2>Oportunidades do Radar</h2><p>O histórico alimenta inteligência de mercado, mas não libera participação.</p></div>
-        <select id="filter"><option value="live">Ativas</option><option value="historical">Históricas</option><option value="unknown">Indeterminadas</option><option value="all">Todas</option></select>
-      </div>
-      <div class="table-wrap"><table><thead><tr><th>Processo</th><th>Objeto</th><th>Órgão</th><th>UF</th><th>Prazo</th><th>Status</th><th>Participação</th></tr></thead><tbody id="rows"></tbody></table></div>
-    </section>
-    <section class="grid">
-      <section class="panel"><h2>Mercado Público Demandante — 12 meses</h2><div id="market"></div></section>
-      <section class="panel"><h2>Central de Pendências</h2><div class="pending"><strong>4 pendências abertas</strong><p>1 bloqueadora. Bloqueadores prevalecem sobre qualquer percentual visual de prontidão.</p></div></section>
+
+    <section id="dashboard" hidden>
+      <section class="notice"><strong id="modeTitle">Ambiente</strong><span id="modeText"></span><button class="link-btn" id="logoutBtn" type="button">Sair</button></section>
+      <section class="cards">
+        <article class="card"><span>Oportunidades ativas</span><strong id="liveCount">0</strong></article>
+        <article class="card"><span>Liberadas para participação</span><strong id="releasedCount">0</strong></article>
+        <article class="card"><span>Histórico</span><strong id="historicalCount">0</strong></article>
+        <article class="card"><span>Pendências bloqueadoras</span><strong id="blockingCount">0</strong></article>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <div><h2>Oportunidades do Radar</h2><p>O histórico alimenta inteligência de mercado, mas não libera participação.</p></div>
+          <select id="filter"><option value="live">Ativas</option><option value="historical">Históricas</option><option value="unknown">Indeterminadas</option><option value="all">Todas</option></select>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Processo</th><th>Objeto</th><th>Órgão</th><th>UF</th><th>Prazo</th><th>Status</th><th>Participação</th></tr></thead><tbody id="rows"></tbody></table></div>
+      </section>
+      <section class="grid">
+        <section class="panel"><h2>Mercado Público Demandante — 12 meses</h2><div id="market"></div></section>
+        <section class="panel"><h2>Central de Pendências</h2><div class="pending" id="pendingBox"></div></section>
+      </section>
     </section>
   </main>
   <script src="app.js"></script>
