@@ -2,91 +2,103 @@
 
 ## Status consolidado
 
-**MVP: IMPLEMENTADO → TESTADO → REVISADO → AUDITADO → VALIDADO → FECHADO COM RESSALVAS OPERACIONAIS.**
+**MVP: IMPLEMENTADO → TESTADO → REVISADO → AUDITADO → VALIDADO → BLINDAGEM FINAL CONCLUÍDA.**
 
-O fechamento do MVP comprova a arquitetura multi-cliente, autenticação real, isolamento por cliente, onboarding, documentação/habilitação, readiness, Radar, ingestão multifuente, histórico/lifecycle, dashboard e configuração operacional da Luvi. Fechamento de MVP não equivale a liberação automática da Luvi para participar de licitações: os Gates documentais e comerciais continuam soberanos.
+O fechamento comprova a arquitetura multi-cliente, autenticação real, isolamento por cliente, onboarding, documentação/habilitação, prontidão, Radar, ingestão multifuente, histórico/lifecycle, dashboard e configuração operacional da primeira cliente. O fechamento técnico do MVP não equivale à liberação automática de um cliente para participar de licitações: os Gates documentais, técnicos, comerciais, logísticos e econômicos continuam soberanos.
+
+Baseline metodológica vigente: **Prompt Mestre v1.17**. Perfil e Playbook permanecem específicos por cliente; para a Luvi, **Playbook Operacional v1.2**.
+
+## Fluxo funcional preservado
+
+Cadastro → Diagnóstico → Documentos/SICAF → Capacidade → Prontidão → Radar → Participação → Resultado.
 
 ## OD-009 — Dashboard e Interface Operacional do Radar
 
 **Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA → FECHADA.**
 
-Entregas: interface responsiva publicada no GitHub Pages, Radar com filtros por ciclo de vida, indicadores operacionais, Mercado Público Demandante, Central de Pendências, modo demonstração e views de backend preparadas.
+Interface responsiva publicada no GitHub Pages, Radar com filtros por ciclo de vida, indicadores operacionais, Mercado Público Demandante, Central de Pendências, modo demonstração e views de backend preparadas.
 
 ## OD-010 — Integração Autenticada do Front-end com Supabase
 
-**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA → FECHADA.**
+**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA → BLINDADA → FECHADA.**
 
-- Primeiro cliente e usuário reais: Luvi Empilhadeiras, perfil administrativo.
-- `od010-auth` autentica sem publicar chave administrativa no front-end.
-- `od010-dashboard` valida a sessão, resolve o cliente por `client_members` e não aceita `client_id` arbitrário do navegador.
-- Smoke test real de login da Luvi concluído.
-- Dashboard reporta dinamicamente a meta e o status da carga histórica.
+- `od010-auth` realiza a autenticação inicial sem publicar chave administrativa no front-end.
+- `od010-dashboard` exige JWT válido no gateway, revalida a sessão, resolve o cliente por `client_members` e não aceita `client_id` arbitrário do navegador.
+- Dashboard reporta dinamicamente a meta e o estado da carga histórica.
+- Segredos administrativos permanecem somente no backend.
 
-## OD-011 — Configuração Operacional Real da Luvi
+## OD-011 — Configuração Operacional da primeira cliente
 
 **Status: IMPLEMENTADA → TESTADA → REVISADA → VALIDADA → FECHADA.**
 
-- Prompt Mestre v1.17 e Playbook Luvi v1.2 versionados.
-- Produto e Locação selecionados; Serviço não selecionado.
-- Capacidades em `em_preparacao`, Radar em `monitor_only` e participação não liberada.
-- Filtro geográfico inicial SP.
-- Termos de Radar: empilhadeiras/paleteiras, peças de empilhadeiras, linha automotiva, filtros, lubrificantes, baterias, elétrica e hidráulica; serviços de manutenção excluídos.
-- Pendências de habilitação permanecem bloqueadoras da participação.
+A configuração cliente-específica permanece segregada da arquitetura universal do UNI. Para a Luvi, Produto e Locação estão em monitoramento; Serviço permanece fora da seleção operacional vigente. A participação automática continua bloqueada enquanto os Gates aplicáveis não forem concluídos.
 
 ## OD-012 — Ingestão oficial e validação do Radar
 
-**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → VALIDADA PARA MVP.**
+**Status: IMPLEMENTADA → TESTADA → REVISADA → AUDITADA → BLINDADA → VALIDADA → FECHADA PARA O MVP.**
 
-### Critério vigente
+### Baseline histórica vigente
 
-Em 08/09/2026 foi aprovada a baseline definitiva de implantação: **6 meses retroativos iniciais + acumulação permanente dos novos dados monitorados**. Não existe obrigação de executar uma expansão retroativa adicional para 12 meses. O histórico cresce organicamente com a operação normal do Radar e os dados já coletados nunca são descartados.
+A baseline funcional original foi preservada: **carga histórica móvel inicial de 12 meses + atualização contínua e incremental + histórico permanente**.
 
-Os enrollments operacionais da Luvi usam `initial_history_months = 6`. A janela inicial considerada para a implantação é março a agosto de 2026; setembro/2026 passa a integrar o fluxo incremental corrente.
+A janela inicial comprovada cobre **01/09/2025 a 31/08/2026**. Setembro/2026 integra o fluxo incremental corrente.
 
-Dados anteriores já existentes continuam preservados como patrimônio histórico do UNI, mas não constituem requisito de fechamento da carga inicial.
+Os enrollments operacionais estão configurados com `initial_history_months = 12`, `initial_load_status = completed` e `incremental_sync_enabled = true`.
 
-### Evidência real
+### Evidência final em 08/09/2026
 
-- Fontes PNCP, Compras.gov.br e CPTM presentes na arquitetura multifuente.
-- Compras.gov.br: janela março–agosto/2026 da modalidade 6 processada até paginação terminal em todos os seis meses, sem execução pendente nessa janela.
-- Totais da carga mensal validada: março 9.732; abril 9.093; maio 11.014; junho 9.803; julho 11.004; agosto 10.514 registros processados.
-- Agosto reconheceu 3.461 registros previamente existentes, preservando idempotência/deduplicação.
-- PNCP possui dados reais persistidos e cadeia de auditoria; falhas/timeouts não são convertidos em falsa conclusão.
-- Deduplicação multifuente endurecida: `canonical_key` passou a ser gravada pela função de ingestão em INSERT e UPDATE e todo o acervo existente foi retroativamente normalizado.
-- Após a correção, 99.229 registros armazenados apresentaram 0 `canonical_key` nula.
-- Na janela março–agosto foram validados 62.681 registros físicos e 62.674 identidades canônicas, com 7 sobreposições multifuente preservando a proveniência de cada fonte.
-- Pré-filtro geográfico/deadline e estado `monitor_only` validados; nenhuma oportunidade foi indevidamente liberada para participação.
-
-### Regra de crescimento histórico
-
-O UNI não executará uma segunda carga retroativa apenas para atingir 12 meses. A base inicial de 6 meses permanece armazenada e o Radar adiciona continuamente os editais atuais. Aproximadamente seis meses de operação acrescentam naturalmente mais seis meses ao acervo, formando cerca de 12 meses de histórico sem retrabalho retroativo. O mesmo princípio mantém o crescimento para 18, 24 meses e além.
-
-## Auditoria de blindagem
+- Compras.gov.br: paginação terminal comprovada mês a mês de setembro/2025 a agosto/2026.
+- Setembro/2025: 25 páginas concluídas.
+- Outubro/2025: 28 páginas concluídas.
+- Novembro/2025 a agosto/2026: todos os meses com evidência de paginação terminal registrada.
+- Setembro/2026: ingestão incremental corrente validada no Compras.gov.br e no PNCP.
+- PNCP em 08/09/2026, modalidade testada: páginas 1 a 13 processadas até `complete=true`.
+- Acervo final desta blindagem: **126.324 oportunidades estruturais**.
+- Identidades canônicas únicas: **126.324**.
+- `canonical_key` nula: **0**.
+- Duplicações canônicas: **0**.
+- Cobertura de publicação armazenada: **01/09/2025 a 08/09/2026**.
+- Fontes oficiais/estruturadas cadastradas: PNCP, Compras.gov.br e portal CPTM.
+- Logs de ingestão em estado `running` após o fechamento: **0**.
 
 ### Identidade e proveniência
 
-A função `upsert_public_opportunity_from_source` foi corrigida para persistir identidade canônica em novos registros e atualizações. Foi adicionado fallback seguro por identificador externo para fontes sem número de controle PNCP, incluindo CPTM. A view canônica mantém prioridade de proveniência PNCP → Compras.gov.br → fontes complementares sem apagar registros físicos das demais fontes.
+A identidade canônica é soberana entre fontes. Sobreposições multifuente não geram oportunidades duplicadas; a proveniência de cada origem permanece registrada por snapshots. Foi criado índice único sobre `canonical_key` e a função de upsert foi blindada para reutilizar a identidade canônica existente antes de criar nova oportunidade.
 
-### Segurança
+## Blindagem de segurança
 
-Após a blindagem, as views apontadas pelo advisor como `SECURITY DEFINER` foram convertidas para `security_invoker`, incluindo as views de Radar, mercado, identidade canônica e proveniência. O `search_path` da função de identidade canônica foi fixado.
+Resultado da regressão final:
 
-Permanecem avisos não críticos conhecidos:
+- **42/42 tabelas públicas com RLS habilitado.**
+- Teste autenticado do proprietário: acesso somente ao próprio cliente e seus registros.
+- Teste autenticado com UUID externo sem vínculo: `clients = 0`, `profiles = 0`, `enterprise = 0`, matches = 0.
+- Helper de membership foi removido do schema público e mantido em schema privado.
+- Funções `SECURITY DEFINER` críticas foram endurecidas com `search_path` controlado.
+- O bootstrap de cliente possui trava para impedir criação/vínculo múltiplo do mesmo usuário e índice único para evitar condição de corrida.
+- Tabelas privadas de cliente não concedem privilégios anônimos.
+- Views operacionais sensíveis usam o modelo de segurança compatível com RLS.
 
-1. Tabelas backend-only de ingestão com RLS habilitado e sem policy de usuário — desenho intencional para acesso via backend/service role.
-2. `create_client_with_owner` é `SECURITY DEFINER` porque cria o cliente e associa exclusivamente `auth.uid()` como owner; `is_client_member` é helper `SECURITY DEFINER` que consulta associação do próprio `auth.uid()`. Ambos têm `search_path` fixo e permanecem sob controle de autenticação.
-3. Proteção de senha vazada do Supabase Auth ainda desativada — recomendada antes de produção pública.
+### Avisos conhecidos não bloqueadores
 
-### Regressão do Radar Luvi
-
-A regressão confirmou 3 linhas no dashboard para 3 oportunidades distintas; 2 atuais e 1 histórica. Nenhuma foi liberada para participação. A Luvi permanece corretamente em monitoramento enquanto seus Gates documentais/comerciais aplicáveis não forem concluídos.
+1. `opportunity_ingestion_log`, `opportunity_source_snapshots` e `radar_ingestion_cursors` permanecem com RLS e sem policy de usuário por desenho: são tabelas backend-only e operam em deny-by-default para usuários comuns.
+2. `create_client_with_owner` permanece `SECURITY DEFINER` e executável por usuário autenticado porque é o RPC de bootstrap; a função exige `auth.uid()`, cria somente o próprio vínculo como owner e possui trava de unicidade de membership.
+3. A proteção de senhas vazadas do Supabase Auth permanece desativada e deve ser habilitada quando disponível/adequada ao plano antes de uma abertura pública de produção.
+4. Avisos de performance referentes a FKs menos críticas e índices ainda sem uso não são Gate de integridade; os índices críticos do fluxo Radar/IA/Gates/Participação já foram adicionados e o uso real deve orientar otimizações futuras.
 
 ## Gates preservados
 
-A Luvi permanece em monitoramento e **não está liberada para participação automática** enquanto habilitação/documentação, compatibilidade comercial e demais Gates aplicáveis não forem concluídos. O sistema não usa percentual visual de prontidão para superar bloqueadores.
+A primeira cliente permanece em **`monitor_only`**, com `participation_released = false` e nenhum enrollment com `participation_enabled = true`.
+
+Nenhuma porcentagem visual de prontidão pode superar requisito impeditivo. O Radar pode localizar e analisar oportunidades, mas participação depende dos Gates do Prompt Mestre, do Perfil e do Playbook aplicáveis.
+
+## Compatibilidade Supabase
+
+A arquitetura diferencia explicitamente **GRANT** de **RLS**. Objetos destinados à Data API recebem somente os privilégios necessários; objetos privados permanecem sem exposição indevida. Essa regra é obrigatória para novas migrações.
 
 ## Fechamento
 
-A baseline histórica de implantação está formalmente definida em **6 meses retroativos, seguida de crescimento incremental permanente**. A antiga obrigação de 12 meses retroativos foi revogada. Dados históricos mais antigos já existentes permanecem preservados e não serão apagados.
+**BLINDAGEM FINAL DO MVP: PASS.**
 
-O projeto mantém separação entre: (a) integridade técnica do MVP/Radar; e (b) liberação de cada cliente para participar de uma licitação, que continua subordinada aos Gates do Prompt Mestre e do Playbook aplicável.
+A fundação, onboarding, documentação/SICAF, capacidade, prontidão, Radar, histórico de 12 meses, ingestão incremental, identidade multifuente, integração autenticada e isolamento multi-cliente foram revalidados no ambiente cloud.
+
+O fechamento técnico não revoga nem flexibiliza Gates de participação de clientes. Mudanças futuras deverão gerar nova versão/migração e não podem reescrever silenciosamente esta baseline.
