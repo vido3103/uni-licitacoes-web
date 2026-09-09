@@ -11,21 +11,50 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 min-h-screen bg-slate-900 text-white p-5">
-      <h1 className="text-2xl font-bold mb-8">
-        UNI Licitações
-      </h1>
+    <aside className="w-72 min-h-screen bg-slate-950 text-white p-6">
 
-      <nav className="space-y-3">
-        {items.map((item) => (
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold">
+          UNI
+        </h1>
+
+        <p className="text-sm text-slate-400">
+          Licitações Web
+        </p>
+      </div>
+
+
+      <nav className="space-y-2">
+
+        {items.map((item, index) => (
+
           <div
             key={item}
-            className="p-3 rounded-lg hover:bg-slate-700 cursor-pointer"
+            className={`
+              p-3 rounded-lg cursor-pointer
+              transition
+              ${
+                index === 0
+                ? "bg-slate-800"
+                : "hover:bg-slate-800"
+              }
+            `}
           >
+
             {item}
+
           </div>
+
         ))}
+
       </nav>
+
+
+      <div className="absolute bottom-6 text-xs text-slate-500">
+        UNI v0.2
+      </div>
+
+
     </aside>
   );
 }
