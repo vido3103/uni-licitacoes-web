@@ -61,7 +61,6 @@ function capabilityId(opportunity: Opportunity | null) {
 }
 
 function fileMime(file: File) {
-  if (file.type) return file.type;
   const n = file.name.toLowerCase();
   if (n.endsWith(".pdf")) return "application/pdf";
   if (n.endsWith(".zip")) return "application/zip";
@@ -235,24 +234,26 @@ export default function Radar() {
     void Promise.all([runTriage(opportunity), syncPncpDocuments(opportunity)]);
   }
 
-  async function uploadFiles(files: FileList | null) {
+  async function uploadFiles(files: File[]) {
     const oid = opportunityId(selected);
-    if (!files?.length || !supabase || !data?.client?.id || !selected || !oid) return;
+    if (!files.length || !supabase || !data?.client?.id || !selected || !oid) return;
     setUploading(true);
-    setUploadMessage("");
+    setUploadMessage(`${files.length} arquivo(s) selecionado(s). Enviando...`);
 
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
       if (authError || !auth.user) throw new Error("Sessão não autenticada.");
 
-      for (const file of Array.from(files)) {
+      let completed = 0;
+      for (const file of files) {
         if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name}: o arquivo excede o limite de 50 MB.`);
         const mime = fileMime(file);
         if (!mime) throw new Error(`${file.name}: formato não permitido.`);
+        setUploadMessage(`Enviando ${completed + 1} de ${files.length}: ${file.name}`);
         const path = `${data.client.id}/${oid}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName(file.name)}`;
         const { error: storageError } = await supabase.storage
           .from("opportunity-documents")
-          .upload(path, file, { upsert: false, contentType: mime });
+          .upload(path, file, { upsert: false, contentType: mime, cacheControl: "3600" });
         if (storageError) throw new Error(`Falha no armazenamento de ${file.name}: ${storageError.message}`);
 
         const { error: dbError } = await supabase.from("opportunity_documents").insert({
@@ -272,9 +273,10 @@ export default function Radar() {
           await supabase.storage.from("opportunity-documents").remove([path]);
           throw new Error(`Falha ao registrar ${file.name}: ${dbError.message}`);
         }
+        completed += 1;
       }
 
-      setUploadMessage("Arquivo(s) anexado(s) com sucesso e disponíveis para complementar a análise.");
+      setUploadMessage(`${completed} arquivo(s) anexado(s) com sucesso e disponíveis para complementar a análise.`);
       await loadDocuments(selected);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -449,7 +451,7 @@ export default function Radar() {
                 <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center hover:border-blue-300 hover:bg-blue-50/40">
                   <span className="text-sm font-semibold text-slate-700">{uploading ? "Enviando arquivos..." : "Clique para anexar os arquivos baixados do PNCP"}</span>
                   <span className="mt-1 text-xs text-slate-400">Os arquivos ficam protegidos no ambiente do cliente e vinculados a esta oportunidade.</span>
-                  <input type="file" multiple disabled={uploading} accept=".pdf,.zip,.doc,.docx,.xls,.xlsx,application/pdf,application/zip" onChange={(e) => { void uploadFiles(e.target.files); e.currentTarget.value = ""; }} className="hidden" />
+                  <input type="file" multiple disabled={uploading} accept=".pdf,.zip,.doc,.docx,.xls,.xlsx,application/pdf,application/zip" onChange={(e) => { const chosen = Array.from(e.currentTarget.files ?? []); e.currentTarget.value = ""; void uploadFiles(chosen); }} className="hidden" />
                 </label>
                 {uploadMessage && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-700">{uploadMessage}</div>}
 
