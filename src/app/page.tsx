@@ -15,6 +15,7 @@ import Relatorios from "@/modules/relatorios/Relatorios";
 import Documentos from "@/modules/documentos/Documentos";
 import Fornecedores from "@/modules/fornecedores/Fornecedores";
 import Configuracoes from "@/modules/configuracoes/Configuracoes";
+import CompanyOnboarding from "@/modules/onboarding/CompanyOnboarding";
 
 type HeaderNotification = { id:string; title:string; detail:string; kind:"pending"|"analysis"; createdAt?:string|null };
 function notificationTime(value?:string|null){if(!value)return"";const d=new Date(value);if(Number.isNaN(d.getTime()))return"";return new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(d)}
@@ -31,19 +32,21 @@ export default function Home(){
   async function loadNotifications(){
     if(!supabase)return;setNotificationsLoading(true);
     try{const {data:auth}=await supabase.auth.getUser();if(!auth.user){setNotifications([]);return}const {data:membership,error:membershipError}=await supabase.from("client_members").select("client_id").eq("user_id",auth.user.id).limit(1).maybeSingle();if(membershipError||!membership?.client_id){setNotifications([]);return}
-      const [pendingResponse,queueResponse]=await Promise.all([supabase.from("client_pending_items").select("id,title,description,impact,state,created_at").eq("client_id",membership.client_id).not("state","in","(resolvida,cancelada)").order("created_at",{ascending:false}).limit(5),supabase.from("opportunity_ai_analysis_queue").select("id,status,prompt_master_version,queued_at,completed_at,error_detail").eq("client_id",membership.client_id).in("status",["queued","processing","failed"]).order("queued_at",{ascending:false}).limit(5)]);
+      const [pendingResponse,queueResponse]=await Promise.all([supabase.from("client_pending_items").select("id,title,description,impact,state,created_at").eq("client_id",membership.client_id).not("state","in","(resolvida,cancelada)").order("created_at",{ascending:false}).limit(5),supabase.from("opportunity_ai_analysis_queue").select("id,status,prompt_master_version,queued_at,completed_at,error_detail").eq("client_id",membership.client_id).in("status",["pending","processing","failed","retry_wait"]).order("queued_at",{ascending:false}).limit(5)]);
       const pending:HeaderNotification[]=(pendingResponse.data??[]).map(row=>({id:`pending-${row.id}`,title:String(row.title||"Pendência do cadastro"),detail:row.description?String(row.description):`Impacto: ${String(row.impact||"a verificar")}`,kind:"pending",createdAt:row.created_at}));
       const queue:HeaderNotification[]=(queueResponse.data??[]).map(row=>({id:`analysis-${row.id}`,title:row.status==="failed"?"Falha na Análise Detalhada":row.status==="processing"?"Análise Detalhada em execução":"Análise Detalhada aguardando execução",detail:row.status==="failed"?String(row.error_detail||"A execução precisa ser revisada."):`Execução registrada com ${String(row.prompt_master_version||"Prompt Mestre")}.`,kind:"analysis",createdAt:row.queued_at}));
       setNotifications([...queue,...pending].sort((a,b)=>new Date(b.createdAt||0).getTime()-new Date(a.createdAt||0).getTime()).slice(0,8));
     }finally{setNotificationsLoading(false)}
   }
+
   useEffect(()=>{void loadNotifications()},[active]);
+  useEffect(()=>{if(!supabase)return;void (async()=>{const {data,error}=await supabase.rpc("get_my_uni_identity");if(error||!data)return;const identity=data as {platform_role?:string|null;memberships?:unknown[]};if(identity.platform_role!=="platform_owner"&&Array.isArray(identity.memberships)&&identity.memberships.length===0)setActive("Empresas")})()},[]);
   async function handleSignOut(){if(!supabase||signingOut)return;setSigningOut(true);await supabase.auth.signOut();setSigningOut(false)}
   function openNotification(n:HeaderNotification){setNotificationsOpen(false);setActive(n.kind==="analysis"?"Radar":"Configurações")}
   function navigate(module:string){setActive(module);setMobileOpen(false)}
   function submitGlobalSearch(e:React.FormEvent){e.preventDefault();const q=globalQuery.trim();if(!q)return;sessionStorage.setItem("uni-global-search",q);setActive("Editais")}
-  function renderContent(){switch(active){case"Dashboard":return <Dashboard onNavigate={navigate}/>;case"Radar":return <Radar/>;case"Editais":return <Editais/>;case"CFP":return <CFP/>;case"Gate Econômico":return <GateEconomico/>;case"Disputa":return <Disputa/>;case"Relatórios":return <Relatorios/>;case"Documentos":return <Documentos/>;case"Fornecedores":return <Fornecedores/>;case"Configurações":return <Configuracoes/>;default:return <Dashboard onNavigate={navigate}/>}}
-  const mobileItems=["Dashboard","Radar","Editais","CFP","Gate Econômico","Disputa","Relatórios","Documentos","Fornecedores","Configurações"];
+  function renderContent(){switch(active){case"Dashboard":return <Dashboard onNavigate={navigate}/>;case"Empresas":return <CompanyOnboarding/>;case"Radar":return <Radar/>;case"Editais":return <Editais/>;case"CFP":return <CFP/>;case"Gate Econômico":return <GateEconomico/>;case"Disputa":return <Disputa/>;case"Relatórios":return <Relatorios/>;case"Documentos":return <Documentos/>;case"Fornecedores":return <Fornecedores/>;case"Configurações":return <Configuracoes/>;default:return <Dashboard onNavigate={navigate}/>}}
+  const mobileItems=["Dashboard","Empresas","Radar","Editais","CFP","Gate Econômico","Disputa","Relatórios","Documentos","Fornecedores","Configurações"];
 
   return <AuthGate><main className="min-h-screen bg-[#f4f8fc] text-slate-900"><div className="flex min-h-screen"><Sidebar active={active} onNavigate={navigate}/><div className="min-w-0 flex-1">
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur"><div className="flex h-[76px] items-center gap-4 px-4 sm:px-6 xl:px-8"><button type="button" onClick={()=>setMobileOpen(v=>!v)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm lg:hidden" aria-label="Abrir menu">☰</button><div className="hidden min-w-[260px] lg:block"><p className="text-sm font-semibold text-slate-900">Inteligência em Licitações</p><p className="text-xs text-slate-500">para o seu resultado</p></div>
