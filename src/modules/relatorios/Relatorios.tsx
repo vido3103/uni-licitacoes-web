@@ -1,23 +1,32 @@
-export default function Relatorios() {
-  return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-2">
-        Relatórios
-      </h1>
+"use client";
 
-      <p className="text-slate-500 mb-8">
-        Central de relatórios e documentos gerados pelo UNI.
-      </p>
+import { useEffect, useMemo, useState } from "react";
+import { BackendDashboard, loadCurrentClientDashboard } from "@/lib/dashboard";
+import { supabase } from "@/lib/supabase";
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-2">
-          Documentos
-        </h2>
+type Opportunity=Record<string,unknown>;
+type Gate={id:string;opportunity_id:string;cfp_item_id:string;final_unit_cost:number;suggested_unit_price:number;estimated_unit_value:number|null;viability_status:string;target_markup_percent:number;updated_at:string};
+type Strategy={id:string;opportunity_id:string;cfp_item_id:string;opening_unit_price:number;minimum_unit_price:number;status:string;updated_at:string};
+type Queue={id:string;opportunity_id:string;status:string;prompt_master_version:string|null;queued_at:string;completed_at:string|null;error_detail:string|null};
+function text(v:unknown,f="—"){return v===null||v===undefined||v===""?f:String(v)}
+function money(v:unknown){const n=Number(v);return Number.isFinite(n)?new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n):"—"}
+function date(v:unknown){if(!v)return"—";const d=new Date(String(v));return Number.isNaN(d.getTime())?text(v):new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(d)}
+function err(v:unknown){if(v instanceof Error)return v.message;if(v&&typeof v==="object"){const o=v as Record<string,unknown>;return [o.message,o.details,o.hint,o.code].filter(Boolean).map(String).join(" · ")||"Erro não identificado."}return String(v)}
 
-        <p className="text-slate-500">
-          Nenhum relatório gerado no momento.
-        </p>
-      </div>
-    </div>
-  );
+export default function Relatorios(){
+ const [dashboard,setDashboard]=useState<BackendDashboard|null>(null);const [gates,setGates]=useState<Gate[]>([]);const [strategies,setStrategies]=useState<Strategy[]>([]);const [queue,setQueue]=useState<Queue[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState("");const [opportunityId,setOpportunityId]=useState("");
+ async function load(){setLoading(true);setError("");try{const d=await loadCurrentClientDashboard();if(!d?.client?.id)throw new Error("Tenant não associado.");setDashboard(d);const [g,s,q]=await Promise.all([supabase!.from("gate_economic_results").select("id,opportunity_id,cfp_item_id,final_unit_cost,suggested_unit_price,estimated_unit_value,viability_status,target_markup_percent,updated_at").eq("client_id",d.client.id),supabase!.from("dispute_strategies").select("id,opportunity_id,cfp_item_id,opening_unit_price,minimum_unit_price,status,updated_at").eq("client_id",d.client.id),supabase!.from("opportunity_ai_analysis_queue").select("id,opportunity_id,status,prompt_master_version,queued_at,completed_at,error_detail").eq("client_id",d.client.id).order("queued_at",{ascending:false})]);if(g.error||s.error||q.error)throw g.error||s.error||q.error;setGates((g.data??[]) as Gate[]);setStrategies((s.data??[]) as Strategy[]);setQueue((q.data??[]) as Queue[]);}catch(e){setError(err(e))}finally{setLoading(false)}}
+ useEffect(()=>{void load()},[]);
+ const opportunities=(dashboard?.opportunities??[]) as Opportunity[];
+ const visibleOpps=opportunityId?opportunities.filter(o=>String(o.opportunity_id)===opportunityId):opportunities;
+ const gateRows=opportunityId?gates.filter(g=>g.opportunity_id===opportunityId):gates;const disputeRows=opportunityId?strategies.filter(s=>s.opportunity_id===opportunityId):strategies;const queueRows=opportunityId?queue.filter(q=>q.opportunity_id===opportunityId):queue;
+ const totals=useMemo(()=>gateRows.reduce((a,g)=>{a.cost+=Number(g.final_unit_cost);a.revenue+=Number(g.suggested_unit_price);if(g.viability_status==="viable")a.viable++;if(g.viability_status==="not_viable")a.notViable++;return a},{cost:0,revenue:0,viable:0,notViable:0}),[gateRows]);
+ function exportCsv(){const header=["Processo","Órgão","Objeto","Prazo","Status"],rows=visibleOpps.map(o=>[text(o.process_number,""),text(o.buyer_name,""),text(o.object_text??o.title,""),text(o.proposal_deadline,""),text(o.match_status,"")]);const csv=[header,...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(";")).join("\n");const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`uni-relatorio-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url)}
+ if(loading)return <div className="p-8"><div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500">Carregando relatórios...</div></div>;
+ return <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8 print:p-0"><div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end print:hidden"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Relatórios</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Central de Relatórios</h1><p className="mt-2 text-sm text-slate-500">Visão consolidada do tenant sem dados demonstrativos.</p></div><div className="flex gap-2"><button onClick={()=>void load()} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">Atualizar</button><button onClick={exportCsv} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700">Exportar CSV</button><button onClick={()=>window.print()} className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white">Imprimir / Salvar PDF</button></div></div>{error&&<div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
+ <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Relatório operacional UNI</h2><p className="text-sm text-slate-500">{dashboard?.client?.display_name||dashboard?.client?.legal_name||"Cliente"} · gerado em {date(new Date().toISOString())}</p></div><select value={opportunityId} onChange={e=>setOpportunityId(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm print:hidden"><option value="">Todas as oportunidades</option>{opportunities.map(o=><option key={String(o.opportunity_id)} value={String(o.opportunity_id)}>{text(o.process_number)} · {text(o.buyer_name)}</option>)}</select></div>
+ <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Oportunidades",visibleOpps.length],["Itens viáveis",totals.viable],["Itens inviáveis",totals.notViable],["Estratégias de disputa",disputeRows.length]].map(([l,v])=><div key={String(l)} className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-400">{l}</p><p className="mt-2 text-2xl font-bold">{v}</p></div>)}</div>
+ <div className="mt-6"><h3 className="font-bold">Oportunidades</h3><div className="mt-2 overflow-x-auto"><table className="min-w-[900px] w-full text-left text-xs"><thead className="bg-slate-50"><tr>{["Processo","Órgão","Objeto","Prazo","Match","Participação"].map(h=><th key={h} className="px-3 py-2">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{visibleOpps.map(o=><tr key={String(o.opportunity_id)}><td className="px-3 py-2 font-semibold">{text(o.process_number)}</td><td className="px-3 py-2">{text(o.buyer_name)}</td><td className="max-w-[360px] px-3 py-2">{text(o.object_text??o.title)}</td><td className="px-3 py-2">{date(o.proposal_deadline)}</td><td className="px-3 py-2">{text(o.match_status)}</td><td className="px-3 py-2">{o.participation_allowed===true?"Liberada":"Não liberada / pendente"}</td></tr>)}{visibleOpps.length===0&&<tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">Nenhuma oportunidade.</td></tr>}</tbody></table></div></div>
+ <div className="mt-6 grid gap-5 xl:grid-cols-2"><div><h3 className="font-bold">Gate Econômico</h3><div className="mt-2 space-y-2">{gateRows.length?gateRows.map(g=><div key={g.id} className="rounded-xl border border-slate-100 p-3 text-xs"><div className="flex justify-between"><span>Custo final: <b>{money(g.final_unit_cost)}</b></span><span>Preço: <b>{money(g.suggested_unit_price)}</b></span></div><p className="mt-1 text-slate-500">Markup {g.target_markup_percent}% · {g.viability_status==="viable"?"VIÁVEL":g.viability_status==="not_viable"?"INVIÁVEL":"REFERÊNCIA AUSENTE"}</p></div>):<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Sem resultados consolidados.</p>}</div></div><div><h3 className="font-bold">Análise Detalhada</h3><div className="mt-2 space-y-2">{queueRows.length?queueRows.slice(0,8).map(q=><div key={q.id} className="rounded-xl border border-slate-100 p-3 text-xs"><p className="font-semibold">{q.status==="queued"?"Aguardando execução":q.status==="processing"?"Em execução":q.status==="failed"?"Falha":q.status}</p><p className="mt-1 text-slate-500">{text(q.prompt_master_version,"Prompt não informado")} · {date(q.queued_at)}</p>{q.error_detail&&<p className="mt-1 text-rose-600">{q.error_detail}</p>}</div>):<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma execução registrada.</p>}</div></div></div>
+ </section></div>;
 }
