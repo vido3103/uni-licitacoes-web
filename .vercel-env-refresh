@@ -1,0 +1,1 @@
+Environment variables configured for Preview on 2026-09-10. This marker intentionally triggers a fresh preview build so NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are embedded by Next.js at build time.
