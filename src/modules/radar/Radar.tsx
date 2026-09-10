@@ -71,6 +71,17 @@ function fileMime(file: File) {
   return "";
 }
 
+function errorMessage(err: unknown) {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const parts = [e.message, e.details, e.hint, e.code, e.context].filter(Boolean).map(String);
+    if (parts.length) return parts.join(" · ");
+    try { return JSON.stringify(err); } catch { return "Erro não identificado."; }
+  }
+  return String(err);
+}
+
 function stageLabel(stage?: string) {
   if (stage === "operational_prefilter") return "Filtro operacional";
   if (stage === "capability_match") return "Compatibilidade com o perfil";
@@ -147,18 +158,19 @@ export default function Radar() {
       .eq("client_id", data.client.id)
       .eq("opportunity_id", oid)
       .order("uploaded_at", { ascending: false });
-    if (docsError) setUploadMessage(`Não foi possível consultar os anexos: ${docsError.message}`);
+    if (docsError) setUploadMessage(`Não foi possível consultar os anexos: ${errorMessage(docsError)}`);
     setDocuments((rows ?? []) as OpportunityDocument[]);
     setDocsLoading(false);
   }
 
-  async function runTriage(opportunity: Opportunity) {
-    if (!supabase) return;
+  async function runTriage(opportunity: Opportunity): Promise<TriageSnapshot> {
+    if (!supabase) throw new Error("Conexão com o backend indisponível.");
     const oid = opportunityId(opportunity);
     const cid = capabilityId(opportunity);
     if (!oid || !cid) {
-      setTriageError("A oportunidade ainda não possui os identificadores necessários para executar a triagem.");
-      return;
+      const message = "A oportunidade ainda não possui os identificadores necessários para executar a triagem.";
+      setTriageError(message);
+      throw new Error(message);
     }
     setTriageBusy(true);
     setTriageError("");
@@ -177,7 +189,7 @@ export default function Radar() {
       if (matchResponse.error) throw matchResponse.error;
       const run = runResponse.data as { result?: string; stages?: TriageStage[]; created_at?: string } | null;
       const match = matchResponse.data as { match_status?: string; deterministic_score?: number | null; deterministic_reasons?: unknown; participation_allowed?: boolean } | null;
-      setTriage({
+      const snapshot: TriageSnapshot = {
         result: String(run?.result ?? result ?? "unknown"),
         stages: Array.isArray(run?.stages) ? run!.stages! : [],
         created_at: run?.created_at,
@@ -185,11 +197,14 @@ export default function Radar() {
         deterministic_score: match?.deterministic_score ?? null,
         deterministic_reasons: match?.deterministic_reasons,
         participation_allowed: match?.participation_allowed,
-      });
+      };
+      setTriage(snapshot);
       await refreshDashboard();
+      return snapshot;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       setTriageError(`A triagem não pôde ser concluída: ${msg}`);
+      throw err;
     } finally {
       setTriageBusy(false);
     }
@@ -216,7 +231,7 @@ export default function Radar() {
       });
       await loadDocuments(opportunity);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       setDocumentSync({ status: "error", reason: msg });
       await loadDocuments(opportunity);
     }
@@ -231,7 +246,7 @@ export default function Radar() {
     setTriage(null);
     setTriageError("");
     setDocumentSync({ status: "idle" });
-    void Promise.all([runTriage(opportunity), syncPncpDocuments(opportunity)]);
+    void Promise.allSettled([runTriage(opportunity), syncPncpDocuments(opportunity)]);
   }
 
   async function uploadFiles(files: File[]) {
@@ -254,7 +269,7 @@ export default function Radar() {
         const { error: storageError } = await supabase.storage
           .from("opportunity-documents")
           .upload(path, file, { upsert: false, contentType: mime, cacheControl: "3600" });
-        if (storageError) throw new Error(`Falha no armazenamento de ${file.name}: ${storageError.message}`);
+        if (storageError) throw new Error(`Falha no armazenamento de ${file.name}: ${errorMessage(storageError)}`);
 
         const { error: dbError } = await supabase.from("opportunity_documents").insert({
           client_id: data.client.id,
@@ -271,7 +286,7 @@ export default function Radar() {
         });
         if (dbError) {
           await supabase.storage.from("opportunity-documents").remove([path]);
-          throw new Error(`Falha ao registrar ${file.name}: ${dbError.message}`);
+          throw new Error(`Falha ao registrar ${file.name}: ${errorMessage(dbError)}`);
         }
         completed += 1;
       }
@@ -279,8 +294,7 @@ export default function Radar() {
       setUploadMessage(`${completed} arquivo(s) anexado(s) com sucesso e disponíveis para complementar a análise.`);
       await loadDocuments(selected);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setUploadMessage(msg);
+      setUploadMessage(errorMessage(err));
     } finally {
       setUploading(false);
     }
@@ -294,19 +308,18 @@ export default function Radar() {
       setAnalysisMessage("A oportunidade não possui identidade operacional suficiente para iniciar a análise.");
       return;
     }
-    if (documents.length === 0) {
-      setAnalysisMessage("Nenhum documento está disponível. Use a contingência e anexe o edital/TR antes de continuar.");
+    if (!triage || triage.result !== "queued_for_ai") {
+      setAnalysisMessage("A análise detalhada só pode ser iniciada após a oportunidade ser APROVADA PARA ANÁLISE na triagem preliminar.");
       return;
     }
-    if (triage?.result === "filtered_out") {
-      setAnalysisMessage("Esta oportunidade foi NÃO APROVADA na triagem preliminar e não será enviada à análise detalhada.");
+    if (documents.length === 0) {
+      setAnalysisMessage("A oportunidade está aprovada, mas ainda não há documentos disponíveis. Aguarde o download automático ou anexe o edital/TR para iniciar a análise detalhada.");
       return;
     }
 
     setAnalysisBusy(true);
-    setAnalysisMessage("Enviando a oportunidade e seus documentos para a fila do Agente...");
+    setAnalysisMessage("Enviando a oportunidade e seus documentos para a fila do UNI...");
     try {
-      if (!triage || triage.result !== "queued_for_ai") await runTriage(selected);
       const { data: queueId, error: queueError } = await supabase.rpc("enqueue_opportunity_ai_analysis", {
         p_capability_id: cid,
         p_opportunity_id: oid,
@@ -317,13 +330,15 @@ export default function Radar() {
       setAnalysisMessage(`Análise detalhada solicitada. Execução ${String(queueId).slice(0, 8)}… registrada com o Prompt Mestre v1.17.`);
       await refreshDashboard();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       setAnalysisQueued(false);
-      setAnalysisMessage(`Não foi possível iniciar a análise detalhada: ${msg}`);
+      setAnalysisMessage(`Não foi possível iniciar a análise detalhada: ${errorMessage(err)}`);
     } finally {
       setAnalysisBusy(false);
     }
   }
+
+  const approvedForAnalysis = triage?.result === "queued_for_ai";
+  const detailedAnalysisReady = approvedForAnalysis && documents.length > 0 && !analysisBusy && !triageBusy;
 
   const syncMessage = documentSync.status === "running"
     ? "Tentando localizar e baixar os documentos oficiais no PNCP..."
@@ -430,6 +445,20 @@ export default function Radar() {
                     </div>
                   </div>
                 )}
+
+                {approvedForAnalysis && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-emerald-800">Oportunidade aprovada para análise detalhada</p>
+                        <p className="mt-1 text-xs text-emerald-700">O botão foi liberado. A execução será iniciada quando os documentos do edital estiverem disponíveis.</p>
+                      </div>
+                      <button type="button" onClick={() => void startDetailedAnalysis()} disabled={!detailedAnalysisReady} className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300">
+                        {analysisBusy ? "Preparando análise..." : documents.length > 0 ? "Iniciar Análise Detalhada" : "Aguardando documentos"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -462,7 +491,11 @@ export default function Radar() {
                   )}
                 </div>
 
-                <button type="button" onClick={() => void startDetailedAnalysis()} disabled={documents.length === 0 || analysisBusy || triageBusy || triage?.result === "filtered_out"} className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">{analysisBusy ? "Preparando análise..." : triage?.result === "filtered_out" ? "Oportunidade não aprovada na triagem" : documents.length > 0 ? "Iniciar / complementar Análise Detalhada" : "Aguardando documentos do edital"}</button>
+                {!approvedForAnalysis && (
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-500">
+                    {triage?.result === "filtered_out" ? "Oportunidade não aprovada na triagem" : "Aguardando aprovação da triagem para liberar a Análise Detalhada"}
+                  </div>
+                )}
                 {analysisMessage && <div className={`mt-3 rounded-lg border p-3 text-xs ${analysisQueued ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>{analysisMessage}</div>}
               </div>
             </div>
