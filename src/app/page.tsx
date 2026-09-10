@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import TopMenu from "@/components/TopMenu";
+import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/modules/dashboard/Dashboard";
 import Radar from "@/modules/radar/Radar";
 import Editais from "@/modules/editais/Editais";
@@ -30,61 +30,60 @@ export default function Home() {
       case "Relatórios":
         return <Relatorios />;
       default:
-        return <Dashboard onNavigate={setActive} />;
+        return (
+          <div className="p-8">
+            <h1 className="text-2xl font-bold text-slate-900">{active}</h1>
+            <p className="mt-2 text-sm text-slate-500">Módulo preparado para a próxima etapa de integração.</p>
+          </div>
+        );
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-800 bg-slate-950 text-white">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-xl font-black shadow-lg shadow-blue-950/30">
-              U
+    <main className="min-h-screen bg-[#f4f8fc] text-slate-900">
+      <div className="flex min-h-screen">
+        <Sidebar active={active} onNavigate={setActive} />
+
+        <div className="min-w-0 flex-1">
+          <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+            <div className="flex h-[76px] items-center gap-4 px-4 sm:px-6 xl:px-8">
+              <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm lg:hidden">☰</button>
+
+              <div className="hidden min-w-[260px] lg:block">
+                <p className="text-sm font-semibold text-slate-900">Inteligência em Licitações</p>
+                <p className="text-xs text-slate-500">para o seu resultado</p>
+              </div>
+
+              <label className="relative mx-auto w-full max-w-[560px]">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+                <input
+                  type="search"
+                  placeholder="Buscar editais, órgãos, processos, palavras-chave..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+
+              <button type="button" className="relative hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 sm:flex">
+                ♢
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">3</span>
+              </button>
+
+              <div className="hidden h-8 w-px bg-slate-200 sm:block" />
+
+              <button type="button" className="flex shrink-0 items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-slate-50">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">VN</span>
+                <span className="hidden xl:block">
+                  <span className="block text-sm font-semibold text-slate-900">Vidrão Nascimento</span>
+                  <span className="block text-xs text-slate-500">Luvi Empilhadeiras</span>
+                </span>
+                <span className="hidden text-xs text-slate-400 sm:inline">⌄</span>
+              </button>
             </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight sm:text-xl">UNI Licitações Web</h1>
-              <p className="text-xs text-slate-400">Inteligência para decisões em licitações</p>
-            </div>
-          </div>
+          </header>
 
-          <div className="flex flex-1 items-center gap-3 lg:max-w-3xl lg:justify-end">
-            <label className="relative hidden flex-1 md:block">
-              <span className="sr-only">Buscar</span>
-              <input
-                type="search"
-                placeholder="Buscar edital, órgão, processo ou palavra-chave..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </label>
-
-            <div className="hidden h-8 w-px bg-slate-800 sm:block" />
-
-            <button
-              type="button"
-              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-left transition hover:border-slate-700"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold">LU</span>
-              <span className="hidden sm:block">
-                <span className="block text-xs font-semibold text-white">Luvi Empilhadeiras</span>
-                <span className="block text-[11px] text-slate-400">Cliente piloto</span>
-              </span>
-              <span className="text-[10px] text-slate-500">▼</span>
-            </button>
-          </div>
+          <section>{renderContent()}</section>
         </div>
-      </header>
-
-      <TopMenu active={active} setActive={setActive} />
-
-      <section className="min-h-[calc(100vh-132px)]">{renderContent()}</section>
-
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-2 px-4 py-5 text-xs text-slate-400 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-          <span>UNI Licitações Web · Ambiente de desenvolvimento</span>
-          <span>Arquitetura SaaS multiempresa</span>
-        </div>
-      </footer>
+      </div>
     </main>
   );
 }
