@@ -31,6 +31,14 @@ const toneClasses: Record<string, string> = {
   amber: "bg-amber-50 text-amber-700",
 };
 
+const statusDotClasses: Record<string, string> = {
+  blue: "bg-blue-500",
+  green: "bg-emerald-500",
+  amber: "bg-amber-500",
+  violet: "bg-violet-500",
+  rose: "bg-rose-500",
+};
+
 export default function Dashboard({ onNavigate }: DashboardProps) {
   return (
     <div className="px-4 py-6 sm:px-6 xl:px-8">
@@ -49,14 +57,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1.1fr]">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             ["⌕", "12", "Oportunidades", "Encontradas", "+33%", "Últimos 7 dias", "from-blue-500 to-blue-600"],
             ["▣", "5", "Editais em Análise", "", "+25%", "Em andamento", "from-emerald-500 to-green-600"],
             ["🛒", "3", "CFP em Cotação", "", "+50%", "Fornecedores", "from-orange-500 to-amber-500"],
             ["▥", "2", "Processos Aprovados", "", "+100%", "No mês", "from-violet-500 to-purple-600"],
           ].map(([icon, value, title, subtitle, trend, helper, gradient]) => (
-            <section key={title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section key={title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-start gap-4">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-lg font-bold text-white shadow-sm`}>{icon}</div>
                 <div className="min-w-0">
@@ -71,34 +79,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </div>
             </section>
           ))}
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 xl:col-span-1">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900">Próximos Prazos</h2>
-              <button className="text-xs font-semibold text-blue-600">Ver todos</button>
-            </div>
-            <div className="space-y-3">
-              {deadlines.slice(0, 2).map(([day, month, code, action]) => (
-                <div key={code} className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-                    <span className="text-sm font-bold leading-none">{day}</span>
-                    <span className="mt-1 text-[9px] font-bold">{month}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-slate-800">{code}</p>
-                    <p className="truncate text-[11px] text-slate-500">{action}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
         </div>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.95fr_0.55fr]">
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_1fr_0.62fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-slate-900">Evolução de Oportunidades</h2>
-              <button className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">Últimos 6 meses⌄</button>
+              <button className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">Últimos 6 meses⌄</button>
             </div>
             <div className="mt-5 h-[190px] rounded-xl bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:14.28%_25%] p-4">
               <svg viewBox="0 0 600 180" className="h-full w-full" aria-label="Gráfico de evolução">
@@ -110,7 +97,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </defs>
                 <path d="M15 145 L105 125 L195 107 L285 90 L375 68 L465 84 L585 55 L585 170 L15 170 Z" fill="url(#area)" />
                 <polyline points="15,145 105,125 195,107 285,90 375,68 465,84 585,55" fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                {["15,145","105,125","195,107","285,90","375,68","465,84","585,55"].map((p) => {
+                {["15,145", "105,125", "195,107", "285,90", "375,68", "465,84", "585,55"].map((p) => {
                   const [cx, cy] = p.split(",");
                   return <circle key={p} cx={cx} cy={cy} r="5" fill="#3b82f6" stroke="white" strokeWidth="2" />;
                 })}
@@ -129,8 +116,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </div>
               </div>
               <div className="min-w-0 flex-1 space-y-2.5 text-xs">
-                {[["blue","Em análise","9"],["green","Aguardando CFP","5"],["amber","Viáveis","4"],["violet","Aprovados","2"],["rose","Não viáveis","2"]].map(([c,l,v]) => (
-                  <div key={l} className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full bg-${c}-500`} />{l}</span><strong>{v}</strong></div>
+                {[["blue", "Em análise", "9"], ["green", "Aguardando CFP", "5"], ["amber", "Viáveis", "4"], ["violet", "Aprovados", "2"], ["rose", "Não viáveis", "2"]].map(([c, l, v]) => (
+                  <div key={l} className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${statusDotClasses[c]}`} />{l}</span>
+                    <strong>{v}</strong>
+                  </div>
                 ))}
               </div>
             </div>
@@ -138,13 +128,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold">Próximos Prazos</h2><button className="text-xs text-blue-600">Ver todos</button>
+              <h2 className="text-sm font-bold">Próximos Prazos</h2>
+              <button className="text-xs font-semibold text-blue-600 hover:text-blue-700">Ver todos</button>
             </div>
             <div className="space-y-3">
               {deadlines.map(([day, month, code, action, city]) => (
                 <div key={code} className="flex gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                  <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-rose-50 text-rose-600"><span className="font-bold leading-none">{day}</span><span className="mt-1 text-[9px] font-bold">{month}</span></div>
-                  <div className="min-w-0"><p className="text-[11px] font-bold text-slate-800">{code}</p><p className="truncate text-[10px] text-slate-500">{action}</p><p className="truncate text-[10px] text-slate-400">{city}</p></div>
+                  <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+                    <span className="font-bold leading-none">{day}</span><span className="mt-1 text-[9px] font-bold">{month}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-slate-800">{code}</p>
+                    <p className="truncate text-[10px] text-slate-500">{action}</p>
+                    <p className="truncate text-[10px] text-slate-400">{city}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -153,13 +150,15 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_0.8fr]">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between px-5 py-4"><h2 className="font-bold">Últimas Oportunidades</h2><button className="text-xs font-semibold text-blue-600">Ver todas</button></div>
+            <div className="flex items-center justify-between px-5 py-4"><h2 className="font-bold">Últimas Oportunidades</h2><button className="text-xs font-semibold text-blue-600 hover:text-blue-700">Ver todas</button></div>
             <div className="overflow-x-auto">
               <table className="min-w-[850px] w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500"><tr>{["Órgão","Modalidade","Número","Objeto","Prazo","Status"].map((h) => <th key={h} className="px-5 py-3 font-semibold">{h}</th>)}</tr></thead>
+                <thead className="bg-slate-50 text-slate-500"><tr>{["Órgão", "Modalidade", "Número", "Objeto", "Prazo", "Status"].map((h) => <th key={h} className="px-5 py-3 font-semibold">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {opportunities.map(([org, modality, number, object, deadline, status, tone]) => (
-                    <tr key={org} className="hover:bg-slate-50/70"><td className="px-5 py-3 font-semibold text-slate-800">{org}</td><td className="px-5 py-3 text-slate-500">{modality}</td><td className="px-5 py-3 text-slate-600">{number}</td><td className="px-5 py-3 text-slate-600">{object}</td><td className="px-5 py-3 text-slate-600">{deadline}</td><td className="px-5 py-3"><span className={`rounded-md px-2 py-1 text-[10px] font-bold ${toneClasses[tone]}`}>{status}</span></td></tr>
+                    <tr key={org} className="hover:bg-slate-50/70">
+                      <td className="px-5 py-3 font-semibold text-slate-800">{org}</td><td className="px-5 py-3 text-slate-500">{modality}</td><td className="px-5 py-3 text-slate-600">{number}</td><td className="px-5 py-3 text-slate-600">{object}</td><td className="px-5 py-3 text-slate-600">{deadline}</td><td className="px-5 py-3"><span className={`rounded-md px-2 py-1 text-[10px] font-bold ${toneClasses[tone]}`}>{status}</span></td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -167,7 +166,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">Atividades Recentes</h2><button className="text-xs font-semibold text-blue-600">Ver todas</button></div>
+            <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">Atividades Recentes</h2><button className="text-xs font-semibold text-blue-600 hover:text-blue-700">Ver todas</button></div>
             <div className="space-y-4">
               {activities.map(([title, detail, time, tone]) => (
                 <div key={title} className="flex gap-3">
@@ -183,7 +182,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-bold">Acesso Rápido</h2>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-              {[["Radar","⌕","Buscar Editais"],["Editais","▣","Nova Análise"],["Relatórios","▥","Gerar Relatório"],["Documentos","□","Meus Documentos"],["Fornecedores","♙","Fornecedores"]].map(([module, icon, label]) => (
+              {[["Radar", "⌕", "Buscar Editais"], ["Editais", "▣", "Nova Análise"], ["Relatórios", "▥", "Gerar Relatório"], ["Documentos", "□", "Meus Documentos"], ["Fornecedores", "♙", "Fornecedores"]].map(([module, icon, label]) => (
                 <button key={label} type="button" onClick={() => onNavigate?.(module)} className="rounded-xl border border-slate-200 bg-white p-4 text-center transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-sm">
                   <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600">{icon}</span>
                   <span className="mt-2 block text-xs font-semibold text-slate-700">{label}</span>
