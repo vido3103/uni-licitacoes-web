@@ -25,12 +25,19 @@ Gate anterior à participação efetiva, consolidando cadastro empresarial, SICA
 4. Todos os testes mutáveis foram executados dentro de transações com rollback; nenhuma avaliação artificial permaneceu persistida.
 5. Edge Function `participation-gate` está ACTIVE v1 e exige JWT válido.
 6. Interface adicionada ao shell com execução explícita do Gate, evidências por requisito, bloqueadores, ressalvas e histórico.
-7. Build do preview: Next.js compilado e TypeScript validado sem erro; deployment `dpl_4qjFYh78ecvY3yZwPZ2a8q7s5ADh` READY.
+7. Build Next.js e TypeScript aprovados no preview final da branch; deployment `dpl_3kkMHsRpKEbEU6Hu1PpCNrdV7Q5h` em READY.
+8. Comparação com `main`: branch somente à frente, sem commits divergentes; alterações limitadas ao módulo do Gate, integração de navegação e este registro de blindagem.
 
 ## Revisão de segurança
 Security Advisor não apontou alerta novo criado pelo Gate. Permanecem somente avisos anteriores: `get_client_dashboard_backend` autenticado como SECURITY DEFINER e proteção de senhas vazadas desabilitada no Auth.
 
-## Resultado
-**APROVADO E BLINDADO EM DESENVOLVIMENTO.**
+## Revisão comprobatória
+- Fluxo bloqueado real confirmado para cliente sem cadastro/SICAF completos.
+- Fluxo aprovado controlado confirmado somente quando todos os requisitos obrigatórios foram satisfeitos.
+- Isolamento de tenant confirmado por teste negativo.
+- Persistência artificial após rollback: zero.
+- Edge Function autenticada e função privilegiada privada confirmadas.
+- Preview final READY e sem erro de compilação/TypeScript.
 
-A promoção para produção deve ocorrer somente após revisão comprobatória do commit final e confirmação do deployment de produção.
+## Resultado
+**APROVADO, VALIDADO, BLINDADO E LIBERADO PARA PROMOÇÃO À PRODUÇÃO.**
