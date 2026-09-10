@@ -46,6 +46,16 @@ export default function Editais() {
     finally { setLoading(false); }
   }
   useEffect(()=>{ void reload(); },[]);
+  useEffect(()=>{
+    const stored = sessionStorage.getItem("uni-global-search");
+    if (!stored) return;
+    const q = stored.trim();
+    sessionStorage.removeItem("uni-global-search");
+    if (!q) return;
+    setQuery(q);
+    setAppliedQuery(q);
+    setPage(1);
+  },[]);
 
   const all = useMemo(() => (data?.opportunities ?? []) as Opportunity[], [data]);
   const unique = (key: string) => Array.from(new Set(all.map(row=>text(row[key])).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"pt-BR"));
