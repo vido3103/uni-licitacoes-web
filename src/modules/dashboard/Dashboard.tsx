@@ -22,9 +22,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [refreshing,setRefreshing]=useState(false);
   const [error,setError]=useState("");
   const [updatedAt,setUpdatedAt]=useState<Date|null>(null);
+  const [referenceNow]=useState(Date.now);
 
   const load=useCallback(async(initial=false)=>{
-    initial?setLoading(true):setRefreshing(true); setError("");
+    if(initial)setLoading(true);else setRefreshing(true); setError("");
     try { const payload=await loadCurrentClientDashboard(); if(!payload) throw new Error("Nenhum ambiente empresarial foi associado a este usuário."); setData(payload); setUpdatedAt(new Date()); }
     catch(e){ setError(errorMessage(e)); }
     finally { setLoading(false); setRefreshing(false); }
@@ -32,10 +33,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   useEffect(()=>{ void load(true); },[load]);
 
-  const opportunities=data?.opportunities??[];
+  const opportunities=useMemo(()=>data?.opportunities??[],[data?.opportunities]);
   const live=n(data?.summary?.live_count), historical=n(data?.summary?.historical_count), released=n(data?.summary?.released_for_participation_count), pending=n(data?.pending?.open_pending_count), blocking=n(data?.pending?.blocking_pending_count), unknown=n(data?.summary?.unknown_count);
-  const deadlines=useMemo(()=>opportunities.filter(o=>typeof o.proposal_deadline==="string"&&new Date(o.proposal_deadline as string).getTime()>=Date.now()).sort((a,b)=>new Date(a.proposal_deadline as string).getTime()-new Date(b.proposal_deadline as string).getTime()).slice(0,4),[opportunities]);
-  const monthly=useMemo(()=>{const now=new Date();return Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const count=opportunities.filter(o=>{if(typeof o.publication_date!=="string")return false;const p=new Date(o.publication_date);return p.getFullYear()===d.getFullYear()&&p.getMonth()===d.getMonth();}).length;return{label:new Intl.DateTimeFormat("pt-BR",{month:"short"}).format(d).replace(".",""),count};});},[opportunities]);
+  const deadlines=useMemo(()=>opportunities.filter(o=>typeof o.proposal_deadline==="string"&&new Date(o.proposal_deadline as string).getTime()>=referenceNow).sort((a,b)=>new Date(a.proposal_deadline as string).getTime()-new Date(b.proposal_deadline as string).getTime()).slice(0,4),[opportunities,referenceNow]);
+  const monthly=useMemo(()=>{const now=new Date(referenceNow);return Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const count=opportunities.filter(o=>{if(typeof o.publication_date!=="string")return false;const p=new Date(o.publication_date);return p.getFullYear()===d.getFullYear()&&p.getMonth()===d.getMonth();}).length;return{label:new Intl.DateTimeFormat("pt-BR",{month:"short"}).format(d).replace(".",""),count};});},[opportunities,referenceNow]);
   const max=Math.max(1,...monthly.map(x=>x.count));
   const points=monthly.map((x,i)=>`${20+i*112},${155-(x.count/max)*100}`).join(" ");
   const client=data?.client?.display_name||data?.client?.legal_name||"Cliente";

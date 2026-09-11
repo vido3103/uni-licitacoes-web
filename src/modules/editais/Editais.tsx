@@ -38,6 +38,7 @@ export default function Editais() {
   const [filters,setFilters]=useState<Filters>(emptyFilters);
   const [sort,setSort]=useState<SortKey>("deadline");
   const [page,setPage]=useState(1);
+  const [referenceNow]=useState(Date.now);
 
   async function reload() {
     setLoading(true); setLoadError("");
@@ -59,8 +60,8 @@ export default function Editais() {
 
   const all = useMemo(() => (data?.opportunities ?? []) as Opportunity[], [data]);
   const unique = (key: string) => Array.from(new Set(all.map(row=>text(row[key])).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"pt-BR"));
-  const modalities = useMemo(()=>unique("modality"),[all]); // eslint-disable-line react-hooks/exhaustive-deps
-  const buyers = useMemo(()=>unique("buyer_name"),[all]); // eslint-disable-line react-hooks/exhaustive-deps
+  const modalities = useMemo(()=>unique("modality"),[all]);
+  const buyers = useMemo(()=>unique("buyer_name"),[all]);
   const locations = useMemo(()=>Array.from(new Set(all.map(row=>[text(row.city),text(row.state)].filter(Boolean).join("/")).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"pt-BR")),[all]);
 
   const results = useMemo(()=>{
@@ -91,7 +92,7 @@ export default function Editais() {
   useEffect(()=>setPage(1),[appliedQuery,filters,sort]);
   const totalPages=Math.max(1,Math.ceil(results.length/PAGE_SIZE));
   const visible=results.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
-  const summary=useMemo(()=>{ const now=Date.now(); return { compatible:all.filter(r=>compatibilityLabel(r)==="Compatível").length, possible:all.filter(r=>compatibilityLabel(r)==="Possivelmente compatível").length, soon:all.filter(r=>{const d=dateValue(r.proposal_deadline)?.getTime();return !!d&&d>now&&d-now<=72*60*60*1000}).length, analysis:all.filter(r=>["Em fila","Em análise"].includes(analysisLabel(r))).length }; },[all]);
+  const summary=useMemo(()=>{ const now=referenceNow; return { compatible:all.filter(r=>compatibilityLabel(r)==="Compatível").length, possible:all.filter(r=>compatibilityLabel(r)==="Possivelmente compatível").length, soon:all.filter(r=>{const d=dateValue(r.proposal_deadline)?.getTime();return !!d&&d>now&&d-now<=72*60*60*1000}).length, analysis:all.filter(r=>["Em fila","Em análise"].includes(analysisLabel(r))).length }; },[all,referenceNow]);
   const activeFilterCount=Object.values(filters).filter(Boolean).length;
   function submitSearch(e:FormEvent){e.preventDefault();setAppliedQuery(query.trim());}
   function setDraft<K extends keyof Filters>(key:K,value:Filters[K]){setDraftFilters(c=>({...c,[key]:value}));}

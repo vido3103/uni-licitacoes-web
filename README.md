@@ -2,9 +2,9 @@
 
 ## Status consolidado
 
-**MVP: IMPLEMENTADO → TESTADO → REVISADO → AUDITADO → VALIDADO → BLINDAGEM FINAL CONCLUÍDA.**
+**MVP ESTRUTURAL: IMPLEMENTADO. BLINDAGEM OPERACIONAL: EM ANDAMENTO.**
 
-O fechamento comprova a arquitetura multi-cliente, autenticação real, isolamento por cliente, onboarding, documentação/habilitação, prontidão, Radar, ingestão multifuente, histórico/lifecycle, dashboard e configuração operacional da primeira cliente. O fechamento técnico do MVP não equivale à liberação automática de um cliente para participar de licitações: os Gates documentais, técnicos, comerciais, logísticos e econômicos continuam soberanos.
+A arquitetura multi-cliente, autenticação, isolamento por cliente, onboarding, documentação/habilitação, Radar, ingestão multifuente, histórico/lifecycle e módulos operacionais estão implementados. O executor real da Análise Detalhada por IA e a validação ponta a ponta até o resultado continuam pendentes; portanto, o repositório não deve ser descrito como sistema integralmente concluído.
 
 Baseline metodológica vigente: **Prompt Mestre v1.17**. Perfil e Playbook permanecem específicos por cliente; para a Luvi, **Playbook Operacional v1.2**.
 
@@ -97,8 +97,8 @@ A arquitetura diferencia explicitamente **GRANT** de **RLS**. Objetos destinados
 
 ## Fechamento
 
-**BLINDAGEM FINAL DO MVP: PASS.**
+**BLINDAGEM ESTRUTURAL DO MVP: PASS. BLINDAGEM OPERACIONAL PONTA A PONTA: PENDENTE.**
 
-A fundação, onboarding, documentação/SICAF, capacidade, prontidão, Radar, histórico de 12 meses, ingestão incremental, identidade multifuente, integração autenticada e isolamento multi-cliente foram revalidados no ambiente cloud.
+A fundação, onboarding, documentação/SICAF, capacidade, prontidão, Radar, histórico de 12 meses, ingestão incremental, identidade multifuente, integração autenticada e isolamento multi-cliente possuem implementação e evidências registradas. A conclusão operacional depende do worker de IA, do retorno dos resultados aos Gates e de nova validação autenticada de toda a cadeia.
 
 O fechamento técnico não revoga nem flexibiliza Gates de participação de clientes. Mudanças futuras deverão gerar nova versão/migração e não podem reescrever silenciosamente esta baseline.
