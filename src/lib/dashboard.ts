@@ -23,10 +23,24 @@ export async function loadCurrentClientDashboard(): Promise<BackendDashboard | n
     .maybeSingle();
 
   if (membershipError) throw membershipError;
-  if (!membership?.client_id) return null;
+
+  let clientId = membership?.client_id ? String(membership.client_id) : "";
+  if (!clientId) {
+    const { data: owner, error: ownerError } = await supabase
+      .from("platform_user_roles")
+      .select("role")
+      .eq("user_id", auth.user.id)
+      .eq("role", "platform_owner")
+      .eq("active", true)
+      .maybeSingle();
+    if (ownerError) throw ownerError;
+    if (owner && typeof window !== "undefined") clientId = localStorage.getItem("uni-owner-client-id") || "";
+  }
+
+  if (!clientId) return null;
 
   const { data, error } = await supabase.functions.invoke("dashboard-backend", {
-    body: { client_id: membership.client_id },
+    body: { client_id: clientId },
   });
 
   if (error) throw error;
