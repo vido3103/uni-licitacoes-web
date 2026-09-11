@@ -23,12 +23,34 @@ export const metadata: Metadata = {
   applicationName: "UNI Licitações",
 };
 
+const themeBootstrap = `
+(() => {
+  const KEY = "uni-theme";
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = () => {
+    const preference = localStorage.getItem(KEY) || "system";
+    const isDark = preference === "dark" || (preference === "system" && media.matches);
+    document.documentElement.classList.toggle("dark", isDark);
+    document.documentElement.dataset.theme = preference;
+  };
+  apply();
+  window.addEventListener("uni-theme-change", apply);
+  media.addEventListener?.("change", () => {
+    if ((localStorage.getItem(KEY) || "system") === "system") apply();
+  });
+})();
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html
       lang="pt-BR"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
