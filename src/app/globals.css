@@ -18,93 +18,55 @@ html.dark {
   color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
+*, *::before, *::after { box-sizing: border-box; min-width: 0; }
+html { background: var(--background); scroll-behavior: smooth; width: 100%; overflow-x: hidden; }
+body { margin: 0; width: 100%; min-height: 100dvh; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; transition: background-color 160ms ease,color 160ms ease; padding-bottom: env(safe-area-inset-bottom); }
+button,input,select,textarea { font: inherit; max-width: 100%; }
+input,select,textarea { min-width: 0; }
+button { cursor: pointer; }
+::selection { background:#bfdbfe;color:#0f172a; }
+
+.dark [class~="bg-[#f4f8fc]"] { background-color:var(--background)!important; }
+.dark [class~="bg-white/95"] { background-color:var(--surface-elevated)!important; }
+.dark .bg-white { background-color:var(--surface)!important; }
+.dark .bg-slate-50 { background-color:var(--surface-soft)!important; }
+.dark .bg-slate-100 { background-color:#172435!important; }
+.dark [class*="bg-blue-50/60"] { background-color:#0b1b2f!important; }
+.dark .bg-blue-50 { background-color:#10213a!important; }
+.dark .bg-emerald-50 { background-color:#10251f!important; }
+.dark .bg-amber-50 { background-color:#282316!important; }
+.dark .bg-rose-50 { background-color:#24181d!important; }
+.dark .text-slate-900 { color:#f8fafc!important; }
+.dark .text-slate-800 { color:#e5edf7!important; }
+.dark .text-slate-700 { color:#d4deeb!important; }
+.dark .text-slate-600 { color:#b7c4d4!important; }
+.dark .text-slate-500 { color:#94a3b8!important; }
+.dark .text-slate-400 { color:#7f8ea3!important; }
+.dark .text-blue-900 { color:#dbeafe!important; }
+.dark .text-blue-700 { color:#bfdbfe!important; }
+.dark .text-blue-600 { color:#93c5fd!important; }
+.dark .text-amber-900,.dark .text-amber-800 { color:#fde68a!important; }
+.dark .text-rose-900,.dark .text-rose-800,.dark .text-rose-700 { color:#fecdd3!important; }
+.dark .text-emerald-700 { color:#a7f3d0!important; }
+.dark .border-slate-100 { border-color:#1e2e42!important; }
+.dark .border-slate-200 { border-color:#2a3b50!important; }
+.dark .border-blue-100 { border-color:#233d5d!important; }
+.dark .border-blue-200 { border-color:#315a8b!important; }
+.dark .border-amber-200 { border-color:#6f5a26!important; }
+.dark .border-rose-200 { border-color:#6a3340!important; }
+.dark input,.dark select,.dark textarea { background-color:#0a1422!important;color:#f8fafc!important;border-color:#33465d!important; }
+.dark input::placeholder,.dark textarea::placeholder { color:#7f8ea3; }
+.dark input[type="date"],.dark input[type="datetime-local"] { color-scheme:dark; }
+.dark .shadow-sm { box-shadow:0 1px 3px rgba(0,0,0,.34),0 1px 2px rgba(0,0,0,.24)!important; }
+.dark .shadow-xl { box-shadow:0 18px 45px rgba(0,0,0,.42)!important; }
+.dark table thead { background-color:#101d2c; }
+.dark table tbody tr:hover { background-color:rgba(30,46,66,.45); }
+
+@media (max-width: 639px) {
+  main,section,details,form { max-width:100%; }
+  section,details { overflow-wrap:anywhere; }
+  input,select,textarea { width:100%; max-width:100%; }
+  input[type="date"],input[type="datetime-local"] { display:block; min-width:0; width:100%; -webkit-appearance:none; appearance:none; }
+  details > div[class*="grid"] { grid-template-columns:minmax(0,1fr)!important; }
+  .overflow-x-auto { -webkit-overflow-scrolling:touch; max-width:100%; }
 }
-
-html {
-  background: var(--background);
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  transition: background-color 160ms ease, color 160ms ease;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-::selection {
-  background: #bfdbfe;
-  color: #0f172a;
-}
-
-/* Tema escuro global — paleta neutra, com cores de estado apenas como acento. */
-.dark [class~="bg-[#f4f8fc]"] { background-color: var(--background) !important; }
-.dark [class~="bg-white/95"] { background-color: var(--surface-elevated) !important; }
-.dark .bg-white { background-color: var(--surface) !important; }
-.dark .bg-slate-50 { background-color: var(--surface-soft) !important; }
-.dark .bg-slate-100 { background-color: #172435 !important; }
-
-.dark .bg-blue-50 { background-color: #10213a !important; }
-.dark .bg-emerald-50 { background-color: #10251f !important; }
-.dark .bg-amber-50 { background-color: #282316 !important; }
-.dark .bg-rose-50 { background-color: #24181d !important; }
-
-.dark .text-slate-900 { color: #f8fafc !important; }
-.dark .text-slate-800 { color: #e5edf7 !important; }
-.dark .text-slate-700 { color: #d4deeb !important; }
-.dark .text-slate-600 { color: #b7c4d4 !important; }
-.dark .text-slate-500 { color: #94a3b8 !important; }
-.dark .text-slate-400 { color: #7f8ea3 !important; }
-
-.dark .text-blue-900 { color: #dbeafe !important; }
-.dark .text-blue-700 { color: #bfdbfe !important; }
-.dark .text-amber-900,
-.dark .text-amber-800 { color: #fde68a !important; }
-.dark .text-rose-900,
-.dark .text-rose-800,
-.dark .text-rose-700 { color: #fecdd3 !important; }
-.dark .text-emerald-700 { color: #a7f3d0 !important; }
-
-.dark .border-slate-100 { border-color: #1e2e42 !important; }
-.dark .border-slate-200 { border-color: #2a3b50 !important; }
-.dark .border-blue-200 { border-color: #315a8b !important; }
-.dark .border-amber-200 { border-color: #6f5a26 !important; }
-.dark .border-rose-200 { border-color: #6a3340 !important; }
-
-.dark input,
-.dark select,
-.dark textarea {
-  background-color: #0a1422;
-  color: #f8fafc;
-  border-color: #33465d;
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder { color: #718096; }
-
-.dark .shadow-sm {
-  box-shadow: 0 1px 3px rgba(0,0,0,.34), 0 1px 2px rgba(0,0,0,.24) !important;
-}
-
-.dark .shadow-xl {
-  box-shadow: 0 18px 45px rgba(0,0,0,.42) !important;
-}
-
-.dark table thead { background-color: #101d2c; }
-.dark table tbody tr:hover { background-color: rgba(30,46,66,.45); }
