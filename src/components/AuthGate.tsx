@@ -15,12 +15,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) return;
-
+    const client = supabase;
     let mounted = true;
 
     const bootstrap = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
+        const { data } = await client.auth.getSession();
         if (mounted) setAuthenticated(Boolean(data.session));
       } catch {
         // Keep the login screen usable even if session restoration fails.
@@ -32,7 +32,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
     void bootstrap();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setAuthenticated(Boolean(session));
         setReady(true);
@@ -48,6 +48,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   async function signIn(event: FormEvent) {
     event.preventDefault();
     if (!supabase || loading) return;
+    const client = supabase;
     setLoading(true);
     setError("");
 
@@ -58,7 +59,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data, error: invokeError } = await supabase.functions.invoke("uni-login", {
+      const { data, error: invokeError } = await client.functions.invoke("uni-login", {
         body: { login: normalized, password },
       });
 
@@ -67,7 +68,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { error: sessionError } = await supabase.auth.setSession({
+      const { error: sessionError } = await client.auth.setSession({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
       });
