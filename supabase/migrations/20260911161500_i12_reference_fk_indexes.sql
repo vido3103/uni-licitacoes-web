@@ -1,0 +1,2 @@
+create index if not exists idx_opportunity_document_refs_document on public.opportunity_document_references(document_id);
+create index if not exists idx_opportunity_document_refs_opportunity on public.opportunity_document_references(opportunity_id);
