@@ -25,10 +25,11 @@ export async function loadCurrentClientDashboard(): Promise<BackendDashboard | n
   if (membershipError) throw membershipError;
   if (!membership?.client_id) return null;
 
-  const { data, error } = await supabase.rpc("get_client_dashboard_backend", {
-    p_client_id: membership.client_id,
+  const { data, error } = await supabase.functions.invoke("dashboard-backend", {
+    body: { client_id: membership.client_id },
   });
 
   if (error) throw error;
-  return data as BackendDashboard;
+  if (!data?.ok || !data?.dashboard) throw new Error(data?.detail || data?.error || "Não foi possível carregar o dashboard.");
+  return data.dashboard as BackendDashboard;
 }
