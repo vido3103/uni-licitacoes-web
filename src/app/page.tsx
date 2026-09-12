@@ -58,7 +58,7 @@ export default function Home() {
         setNotifications([]);
         return;
       }
-      const ownerClientId = typeof window !== "undefined" ? localStorage.getItem("uni-owner-client-id") : null;
+      const ownerClientId = typeof window !== "undefined" ? sessionStorage.getItem("uni-owner-client-id") : null;
       let clientId = ownerClientId;
       if (!clientId) {
         const { data: membership } = await supabase.from("client_members").select("client_id").eq("user_id", auth.user.id).limit(1).maybeSingle();
@@ -101,7 +101,7 @@ export default function Home() {
       const identity = data as { platform_role?: string | null; memberships?: unknown[] };
       const owner = identity.platform_role === "platform_owner";
       setIsPlatformOwner(owner);
-      const selected = owner && typeof window !== "undefined" && Boolean(localStorage.getItem("uni-owner-client-id"));
+      const selected = owner && typeof window !== "undefined" && Boolean(sessionStorage.getItem("uni-owner-client-id"));
       setOwnerClientSelected(selected);
       if (owner && !selected) setActive("Cliente");
       if (!owner && Array.isArray(identity.memberships) && identity.memberships.length === 0) setActive("Empresas");
@@ -111,7 +111,7 @@ export default function Home() {
   async function handleSignOut() {
     if (!supabase || signingOut) return;
     setSigningOut(true);
-    localStorage.removeItem("uni-owner-client-id");
+    sessionStorage.removeItem("uni-owner-client-id");
     setOwnerClientSelected(false);
     await supabase.auth.signOut();
     setSigningOut(false);
@@ -119,7 +119,7 @@ export default function Home() {
 
   function handleLeaveClient() {
     if (!isPlatformOwner) return;
-    localStorage.removeItem("uni-owner-client-id");
+    sessionStorage.removeItem("uni-owner-client-id");
     setOwnerClientSelected(false);
     setNotifications([]);
     setNotificationsOpen(false);
@@ -138,7 +138,7 @@ export default function Home() {
   }
 
   function openOwnerClient(clientId: string) {
-    localStorage.setItem("uni-owner-client-id", clientId);
+    sessionStorage.setItem("uni-owner-client-id", clientId);
     setOwnerClientSelected(true);
     setActive("Dashboard");
     setNotifications([]);
