@@ -65,6 +65,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         setError("Não foi possível iniciar sua sessão. Tente novamente.");
         return;
       }
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("uni-owner-client-id");
+        sessionStorage.removeItem("uni-global-search");
+        window.location.replace(window.location.pathname || "/");
+        return;
+      }
       setAuthenticated(true);
     } catch {
       setError("O acesso ao UNI está temporariamente indisponível. Tente novamente.");
