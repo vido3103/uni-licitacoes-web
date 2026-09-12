@@ -1,15 +1,15 @@
 "use client";
 
-type SidebarProps = { active:string; onNavigate:(module:string)=>void; showCliente?:boolean; ownerWorkspaceOnly?:boolean };
+type SidebarProps = { active:string; onNavigate:(module:string)=>void; showCliente?:boolean; ownerWorkspaceOnly?:boolean; isPlatformOwner?:boolean };
 
-export default function Sidebar({active,onNavigate,showCliente=false,ownerWorkspaceOnly=false}:SidebarProps){
+export default function Sidebar({active,onNavigate,showCliente=false,ownerWorkspaceOnly=false,isPlatformOwner=false}:SidebarProps){
   const items=ownerWorkspaceOnly
     ? [["Cliente","Painel Owner","◉"]]
     : [
       ["Dashboard","Dashboard","⌂"],
       ...(showCliente?[["Cliente","Cliente","◉"]]:[]),
       ["Empresas","Empresas","◇"],
-      ["SICAF","Habilitação SICAF","✓"],
+      ...(isPlatformOwner?[["SICAF","Habilitação SICAF","✓"]]:[]),
       ["Gate de Participação","Gate de Participação","◆"],
       ["Radar","Radar de Licitações","◎"],
       ["Editais","Editais","▤"],
