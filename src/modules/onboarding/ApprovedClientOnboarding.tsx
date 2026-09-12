@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type Enterprise = { client_id: string; cnpj: string | null; legal_name: string; trade_name: string | null; validation_status: string };
 type Lookup = { cnpj: string; legal_name: string | null; trade_name: string | null; registration_status: string | null; city: string | null; state: string | null; cnaes: unknown[]; source?: string };
+type IdentityMembership = { client_id?: string | null };
 const maskCnpj=(v:string)=>v.replace(/\D/g,"").replace(/^(\d{2})(\d)/,"$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/,"$1.$2.$3").replace(/\.(\d{3})(\d)/,".$1/$2").replace(/(\d{4})(\d)/,"$1-$2");
 
 export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (module: string) => void }) {
@@ -20,13 +21,39 @@ export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (
   async function load() {
     if (!supabase) return;
     setLoading(true);
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) { setLoading(false); return; }
-    const { data: membership } = await supabase.from("client_members").select("client_id").eq("user_id", auth.user.id).limit(1).maybeSingle();
-    if (!membership?.client_id) { setLoading(false); return; }
-    const { data } = await supabase.from("client_enterprise_data").select("client_id,cnpj,legal_name,trade_name,validation_status").eq("client_id", membership.client_id).eq("is_current", true).maybeSingle();
-    setEnterprise((data ?? null) as Enterprise | null);
-    setLoading(false);
+    setMessage("");
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+
+      let clientId: string | null = null;
+      const { data: identity, error: identityError } = await supabase.rpc("get_my_uni_identity");
+      if (!identityError && identity && typeof identity === "object") {
+        const memberships = Array.isArray((identity as { memberships?: unknown[] }).memberships)
+          ? ((identity as { memberships?: IdentityMembership[] }).memberships ?? [])
+          : [];
+        clientId = memberships.find((m) => m?.client_id)?.client_id ?? null;
+      }
+
+      if (!clientId) {
+        const { data: membership } = await supabase.from("client_members").select("client_id").eq("user_id", auth.user.id).limit(1).maybeSingle();
+        clientId = membership?.client_id ? String(membership.client_id) : null;
+      }
+
+      if (!clientId) {
+        setMessage("Seu usuário está autenticado, mas ainda não foi possível localizar o vínculo empresarial. Atualize a página; se persistir, o Owner deve revisar a associação do usuário ao cliente.");
+        return;
+      }
+
+      const { data, error } = await supabase.from("client_enterprise_data").select("client_id,cnpj,legal_name,trade_name,validation_status").eq("client_id", clientId).eq("is_current", true).maybeSingle();
+      if (error) throw error;
+      setEnterprise((data ?? null) as Enterprise | null);
+      if (!data) setMessage("O tenant foi localizado, mas os dados cadastrais atuais ainda não estão disponíveis.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Não foi possível carregar o cadastro inicial.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function consult() {
@@ -54,7 +81,7 @@ export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (
   }
 
   if (loading) return <div className="p-8 text-sm text-slate-500">Carregando cadastro inicial...</div>;
-  if (!enterprise) return <div className="mx-auto max-w-3xl p-8"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Seu acesso foi autenticado, mas o tenant ainda não foi vinculado. Saia e entre novamente; se persistir, fale com o Owner do UNI.</div></div>;
+  if (!enterprise) return <div className="mx-auto max-w-3xl p-8"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">{message || "O cadastro empresarial ainda não está disponível para esta sessão."}<button onClick={() => void load()} className="mt-4 block rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900">Tentar novamente</button></div></div>;
 
   return <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 xl:p-8">
     <div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Configuração inicial da empresa</p><h1 className="mt-1 text-3xl font-bold">Valide seu cadastro</h1><p className="mt-2 text-sm text-slate-500">O Owner já aprovou seu acesso. A partir daqui, a própria empresa confirma seus dados e documentos.</p></div>
@@ -64,7 +91,7 @@ export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (
       {!lookup && !done && <button onClick={() => void consult()} disabled={busy || !enterprise.cnpj} className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? "Consultando..." : "Consultar dados oficiais do CNPJ"}</button>}
       {lookup && !done && <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h2 className="font-bold text-emerald-900">Dados localizados</h2><div className="mt-3 grid gap-3 sm:grid-cols-2"><Info label="Razão social" value={lookup.legal_name || "—"}/><Info label="Nome fantasia" value={lookup.trade_name || "—"}/><Info label="Situação cadastral" value={lookup.registration_status || "—"}/><Info label="Município / UF" value={[lookup.city, lookup.state].filter(Boolean).join(" / ") || "—"}/></div><button onClick={() => void confirm()} disabled={busy} className="mt-4 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? "Confirmando..." : "Confirmar dados da empresa"}</button></div>}
     </section>
-    {done && <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-bold text-blue-900">Próximas etapas</h2><p className="mt-2 text-sm text-blue-900">Anexe novamente os documentos da empresa e depois revise a habilitação SICAF.</p><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => onNavigate("Documentos")} className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white">Ir para Documentos</button><button onClick={() => onNavigate("SICAF")} className="rounded-xl border border-blue-300 bg-white px-4 py-2.5 text-sm font-bold text-blue-700">Ir para SICAF</button></div></section>}
+    {done && <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-bold text-blue-900">Próximas etapas</h2><p className="mt-2 text-sm text-blue-900">Anexe os documentos da empresa e depois revise a habilitação SICAF.</p><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => onNavigate("Documentos")} className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white">Ir para Documentos</button><button onClick={() => onNavigate("SICAF")} className="rounded-xl border border-blue-300 bg-white px-4 py-2.5 text-sm font-bold text-blue-700">Ir para SICAF</button></div></section>}
   </div>;
 }
 
