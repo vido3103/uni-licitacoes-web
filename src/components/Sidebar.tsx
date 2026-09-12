@@ -9,7 +9,7 @@ export default function Sidebar({active,onNavigate,showCliente=false,ownerWorksp
       ["Dashboard","Dashboard","⌂"],
       ...(showCliente?[["Cliente","Cliente","◉"]]:[]),
       ["Empresas","Empresas","◇"],
-      ...(isPlatformOwner?[["SICAF","Habilitação SICAF","✓"]]:[]),
+      ["SICAF","Habilitação","✓"],
       ["Gate de Participação","Gate de Participação","◆"],
       ["Radar","Radar de Licitações","◎"],
       ["Editais","Editais","▤"],
