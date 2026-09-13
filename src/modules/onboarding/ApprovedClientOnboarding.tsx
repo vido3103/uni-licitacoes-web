@@ -7,6 +7,7 @@ import { errorMessage } from "@/modules/radar/radar-utils";
 type Enterprise = { client_id: string; cnpj: string | null; legal_name: string; trade_name: string | null; validation_status: string };
 type Lookup = { cnpj: string; legal_name: string | null; trade_name: string | null; registration_status: string | null; city: string | null; state: string | null; cnaes: unknown[]; source?: string };
 type IdentityMembership = { client_id?: string | null };
+type ClientStatus = { id: string; status?: string | null };
 const maskCnpj=(v:string)=>v.replace(/\D/g,"").replace(/^(\d{2})(\d)/,"$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/,"$1.$2.$3").replace(/\.(\d{3})(\d)/,".$1/$2").replace(/(\d{4})(\d)/,"$1-$2");
 
 export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (module: string) => void }) {
@@ -19,34 +20,43 @@ export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (
 
   useEffect(() => { void load(); }, []);
 
+  async function resolveActiveClientId(userId: string) {
+    if (!supabase) return null;
+    const candidateIds = new Set<string>();
+    const { data: identity } = await supabase.rpc("get_my_uni_identity");
+    if (identity && typeof identity === "object") {
+      const memberships = Array.isArray((identity as { memberships?: unknown[] }).memberships)
+        ? ((identity as { memberships?: IdentityMembership[] }).memberships ?? []) : [];
+      memberships.forEach((m) => { if (m?.client_id) candidateIds.add(String(m.client_id)); });
+    }
+    const { data: direct, error: memberError } = await supabase.from("client_members").select("client_id").eq("user_id", userId);
+    if (memberError) throw memberError;
+    (direct ?? []).forEach((m) => { if (m?.client_id) candidateIds.add(String(m.client_id)); });
+    if (candidateIds.size === 0) return null;
+    const ids = Array.from(candidateIds);
+    const { data: clients, error: clientError } = await supabase.from("clients").select("id,status").in("id", ids);
+    if (clientError) throw clientError;
+    const rows = (clients ?? []) as ClientStatus[];
+    const active = rows.find((c) => c.status !== "inactive");
+    return active?.id ?? rows[0]?.id ?? null;
+  }
+
   async function load() {
     if (!supabase) return;
-    setLoading(true);
+    setLoading(true); setMessage("");
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       if (!auth.user) { setMessage("Sessão não autenticada."); return; }
-      let clientId: string | null = null;
-      const { data: identity, error: identityError } = await supabase.rpc("get_my_uni_identity");
-      if (!identityError && identity && typeof identity === "object") {
-        const memberships = Array.isArray((identity as { memberships?: unknown[] }).memberships)
-          ? ((identity as { memberships?: IdentityMembership[] }).memberships ?? [])
-          : [];
-        clientId = memberships.find((m) => m?.client_id)?.client_id ?? null;
-      }
+      const clientId = await resolveActiveClientId(auth.user.id);
       if (!clientId) {
-        const { data: membership, error: memberError } = await supabase.from("client_members").select("client_id").eq("user_id", auth.user.id).limit(1).maybeSingle();
-        if (memberError) throw memberError;
-        clientId = membership?.client_id ? String(membership.client_id) : null;
-      }
-      if (!clientId) {
-        setMessage("Seu acesso foi autenticado, mas o vínculo com a empresa ainda não ficou disponível. Use “Tentar novamente”; se persistir, o Owner deve revisar a associação do usuário.");
+        setMessage("Seu acesso está autenticado, mas não existe empresa ativa associada a este usuário. O Owner precisa vincular o usuário a um cliente ativo.");
         return;
       }
       const { data, error } = await supabase.from("client_enterprise_data").select("client_id,cnpj,legal_name,trade_name,validation_status").eq("client_id", clientId).eq("is_current", true).maybeSingle();
       if (error) throw error;
       setEnterprise((data ?? null) as Enterprise | null);
-      if (!data) setMessage("O cliente foi localizado, mas os dados cadastrais atuais ainda não estão disponíveis.");
+      if (!data) setMessage("A empresa ativa foi localizada, mas os dados cadastrais atuais ainda não estão disponíveis.");
     } catch (e) { setMessage(errorMessage(e)); }
     finally { setLoading(false); }
   }
@@ -78,7 +88,7 @@ export default function ApprovedClientOnboarding({ onNavigate }: { onNavigate: (
   }
 
   if (loading) return <div className="p-8 text-sm text-slate-500">Carregando cadastro inicial...</div>;
-  if (!enterprise) return <div className="mx-auto max-w-3xl p-8"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">{message || "O cadastro empresarial ainda não está disponível para esta sessão."}<button onClick={() => void load()} className="mt-4 block rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900">Tentar novamente</button></div></div>;
+  if (!enterprise) return <div className="mx-auto max-w-3xl p-8"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">{message || "O cadastro empresarial ainda não está disponível para esta sessão."}<button onClick={() => void load()} className="mt-4 block rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900">Verificar vínculo novamente</button></div></div>;
 
   return <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 xl:p-8">
     <div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Configuração inicial da empresa</p><h1 className="mt-1 text-3xl font-bold">Valide seu cadastro</h1><p className="mt-2 text-sm text-slate-500">O Owner já aprovou seu acesso. A empresa confirma seus dados e envia os documentos; a habilitação final é registrada pelo Owner.</p></div>
