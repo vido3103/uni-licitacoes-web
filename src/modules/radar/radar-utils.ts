@@ -124,23 +124,43 @@ export function toAdvancedRadarRpcParams(
   };
 }
 
+function renderErrorValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (value instanceof Error) return value.message;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "object") {
+    const nested = value as Record<string, unknown>;
+    const useful = [nested.message, nested.error, nested.details, nested.hint, nested.code, nested.statusText]
+      .map(renderErrorValue)
+      .filter(Boolean);
+    if (useful.length) return [...new Set(useful)].join(" · ");
+    try {
+      const serialized = JSON.stringify(value);
+      return serialized === "{}" ? "" : serialized;
+    } catch {
+      return "";
+    }
+  }
+  return String(value);
+}
+
 export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    const extra = renderErrorValue((error as Error & { context?: unknown; cause?: unknown }).context) ||
+      renderErrorValue((error as Error & { cause?: unknown }).cause);
+    return extra && extra !== error.message ? `${error.message} · ${extra}` : error.message;
+  }
   if (error === null || error === undefined) return "Erro não identificado.";
   if (typeof error !== "object") return String(error);
 
   const record = error as Record<string, unknown>;
-  const parts = [record.message, record.details, record.hint, record.code, record.context]
-    .filter((value) => value !== null && value !== undefined && value !== "")
-    .map(String);
-  if (parts.length > 0) return parts.join(" · ");
+  const parts = [record.message, record.error, record.details, record.hint, record.code, record.context, record.cause]
+    .map(renderErrorValue)
+    .filter(Boolean);
+  if (parts.length > 0) return [...new Set(parts)].join(" · ");
 
-  try {
-    const serialized = JSON.stringify(error);
-    return serialized === "{}" ? "Erro não identificado." : serialized;
-  } catch {
-    return "Erro não identificado.";
-  }
+  const fallback = renderErrorValue(error);
+  return fallback || "Erro não identificado.";
 }
 
 export function canStartDetailedAnalysis(input: {
