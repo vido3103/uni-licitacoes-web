@@ -54,7 +54,7 @@ export default function OwnerWorkspace({ onOpenClient }: { onOpenClient: (id: st
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Administração da plataforma</p>
         <h1 className="mt-1 text-3xl font-bold">Clientes</h1>
-        <p className="mt-2 text-sm text-slate-500">O Owner apenas aprova o acesso. Cada empresa completa e valida o próprio cadastro dentro do seu tenant.</p>
+        <p className="mt-2 text-sm text-slate-500">O cliente completa o cadastro e anexa os documentos no próprio tenant. O Owner aprova o acesso e, após a conferência documental, registra a habilitação final do cliente.</p>
       </div>
 
       {pending.length > 0 && <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-lg text-white">!</span><div><p className="text-sm font-bold text-amber-950">{pending.length === 1 ? "Nova empresa aguardando sua aprovação" : `${pending.length} empresas aguardando sua aprovação`}</p><p className="mt-1 text-xs text-amber-800">Revise as solicitações abaixo para liberar o onboarding dos novos clientes.</p></div></div><a href="#solicitacoes-owner" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-center text-xs font-bold text-white hover:bg-amber-700">Ver solicitações</a></div>}
