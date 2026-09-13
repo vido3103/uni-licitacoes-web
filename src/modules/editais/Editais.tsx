@@ -4,136 +4,49 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { resolveCurrentClientId } from "@/lib/dashboard";
 import { supabase } from "@/lib/supabase";
 
-type Row = Record<string, unknown>;
-type Mode = "recent" | "history";
-type Requirement = {id:string;title:string;description:string|null;requirement_kind:string;blocking:boolean;status:string;evidence_document_id:string|null;notes:string|null};
-type CompanyDoc = {id:string;original_filename:string;validation_status:string;expiry_date:string|null;is_current:boolean};
+type Row=Record<string,unknown>;
+type Mode="recent"|"history";
+type Requirement={id:string;title:string;description:string|null;requirement_kind:string;blocking:boolean;status:string;evidence_document_id:string|null;notes:string|null};
+type CompanyDoc={id:string;original_filename:string;validation_status:string;expiry_date:string|null;is_current:boolean};
+type OpportunityItem={id:string;item_number:number;description:string;quantity:number|null;unit:string|null;estimated_unit_value:number|null;estimated_total_value:number|null};
 
-const PAGE = 12;
-const txt = (v:unknown) => v == null ? "" : String(v);
-const norm = (v:unknown) => txt(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-const dt = (v:unknown) => { const d = new Date(txt(v)); return Number.isNaN(d.getTime()) ? null : d };
-const fd = (v:unknown) => { const d = dt(v); return d ? new Intl.DateTimeFormat("pt-BR").format(d) : "—" };
-const money = (v:unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? new Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"}).format(n) : "Não informado" };
-const expired = (v:string|null) => { if(!v) return false; const d = new Date(`${v}T23:59:59`); return !Number.isNaN(d.getTime()) && d.getTime() < Date.now() };
+const PAGE=12;
+const txt=(v:unknown)=>v==null?"":String(v);
+const norm=(v:unknown)=>txt(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+const dt=(v:unknown)=>{const d=new Date(txt(v));return Number.isNaN(d.getTime())?null:d};
+const fd=(v:unknown)=>{const d=dt(v);return d?new Intl.DateTimeFormat("pt-BR").format(d):"—"};
+const money=(v:unknown)=>{const n=Number(v);return Number.isFinite(n)&&n>0?new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n):"—"};
+const expired=(v:string|null)=>{if(!v)return false;const d=new Date(`${v}T23:59:59`);return !Number.isNaN(d.getTime())&&d.getTime()<Date.now()};
 
 export default function Editais(){
-  const [rows,setRows] = useState<Row[]>([]);
-  const [loading,setLoading] = useState(true);
-  const [error,setError] = useState("");
-  const [mode,setMode] = useState<Mode>("recent");
-  const [query,setQuery] = useState("");
-  const [applied,setApplied] = useState("");
-  const [page,setPage] = useState(1);
-  const [analysisBusy,setAnalysisBusy] = useState("");
-  const [analysisMessage,setAnalysisMessage] = useState<Record<string,string>>({});
-  const [habilBusy,setHabilBusy] = useState("");
-  const [habilMessage,setHabilMessage] = useState<Record<string,string>>({});
+ const[rows,setRows]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[mode,setMode]=useState<Mode>("recent"),[query,setQuery]=useState(""),[applied,setApplied]=useState(""),[page,setPage]=useState(1);
+ const[analysisBusy,setAnalysisBusy]=useState(""),[analysisMessage,setAnalysisMessage]=useState<Record<string,string>>({}),[habilBusy,setHabilBusy]=useState(""),[habilMessage,setHabilMessage]=useState<Record<string,string>>({});
+ const[openId,setOpenId]=useState<string|null>(null),[items,setItems]=useState<Record<string,OpportunityItem[]>>({}),[selected,setSelected]=useState<Record<string,Set<string>>>({}),[itemsBusy,setItemsBusy]=useState("");
 
-  async function load(){
-    if(!supabase) return;
-    setLoading(true); setError("");
-    try{
-      const id = await resolveCurrentClientId();
-      if(!id) throw new Error("Cliente não associado.");
-      const from = new Date(); from.setFullYear(from.getFullYear()-1);
-      const {data,error:e} = await supabase.from("client_radar_dashboard").select("*").eq("client_id",id).gte("publication_date",from.toISOString().slice(0,10)).order("publication_date",{ascending:false}).limit(1000);
-      if(e) throw e;
-      setRows((data??[]) as Row[]);
-    }catch(e){ setError(e instanceof Error ? e.message : String(e)) }
-    finally{ setLoading(false) }
-  }
+ async function load(){if(!supabase)return;setLoading(true);setError("");try{const id=await resolveCurrentClientId();if(!id)throw new Error("Cliente não associado.");const from=new Date();from.setFullYear(from.getFullYear()-1);const{data,error:e}=await supabase.from("client_radar_dashboard").select("*").eq("client_id",id).gte("publication_date",from.toISOString().slice(0,10)).order("publication_date",{ascending:false}).limit(1000);if(e)throw e;setRows((data??[]) as Row[])}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setLoading(false)}}
+ useEffect(()=>{void load()},[]);
+ useEffect(()=>{const q=sessionStorage.getItem("uni-global-search");if(q){sessionStorage.removeItem("uni-global-search");setQuery(q);setApplied(q);setMode("history")}},[]);
 
-  useEffect(()=>{ void load() },[]);
-  useEffect(()=>{ const q=sessionStorage.getItem("uni-global-search"); if(q){ sessionStorage.removeItem("uni-global-search"); setQuery(q); setApplied(q); setMode("history") } },[]);
+ const filtered=useMemo(()=>{const now=Date.now(),cut30=now-30*86400000,cut12=new Date(now),q=norm(applied);cut12.setFullYear(cut12.getFullYear()-1);return rows.filter(r=>{const p=dt(r.publication_date)?.getTime()??0;if(mode==="recent"&&p<cut30)return false;if(mode==="history"&&p<cut12.getTime())return false;if(q&&!norm([r.process_number,r.buyer_name,r.object_text,r.title,r.modality,r.city,r.state].join(" ")).includes(q))return false;return true})},[rows,mode,applied]);
+ useEffect(()=>setPage(1),[mode,applied]);
+ const pages=Math.max(1,Math.ceil(filtered.length/PAGE)),visible=filtered.slice((page-1)*PAGE,page*PAGE);
+ function submit(e:FormEvent){e.preventDefault();setApplied(query.trim());if(query.trim())setMode("history")}
 
-  const filtered = useMemo(()=>{
-    const now=Date.now(),cut30=now-30*86400000,cut12=new Date(now),q=norm(applied); cut12.setFullYear(cut12.getFullYear()-1);
-    return rows.filter(r=>{
-      const p=dt(r.publication_date)?.getTime()??0;
-      if(mode==="recent"&&p<cut30) return false;
-      if(mode==="history"&&p<cut12.getTime()) return false;
-      if(q&&!norm([r.process_number,r.buyer_name,r.object_text,r.title,r.modality,r.city,r.state].join(" ")).includes(q)) return false;
-      return true;
-    });
-  },[rows,mode,applied]);
+ async function openEdital(r:Row){if(!supabase)return;const opportunityId=txt(r.opportunity_id);if(!opportunityId)return;const next=openId===opportunityId?null:opportunityId;setOpenId(next);if(!next||items[next])return;setItemsBusy(next);try{const clientId=await resolveCurrentClientId();if(!clientId)throw new Error("Cliente não associado.");const[itemRes,selRes]=await Promise.all([supabase.from("public_opportunity_items").select("id,item_number,description,quantity,unit,estimated_unit_value,estimated_total_value").eq("opportunity_id",next).order("item_number"),supabase.from("client_opportunity_item_selections").select("item_id,selected").eq("client_id",clientId).eq("opportunity_id",next).eq("selected",true)]);if(itemRes.error)throw itemRes.error;if(selRes.error)throw selRes.error;const its=(itemRes.data??[]) as OpportunityItem[];setItems(v=>({...v,[next]:its}));setSelected(v=>({...v,[next]:new Set((selRes.data??[]).map(x=>String(x.item_id))) }))}catch(e){setAnalysisMessage(m=>({...m,[opportunityId]:`Não foi possível abrir os itens: ${e instanceof Error?e.message:String(e)}`}))}finally{setItemsBusy("")}}
 
-  useEffect(()=>setPage(1),[mode,applied]);
-  const pages=Math.max(1,Math.ceil(filtered.length/PAGE));
-  const visible=filtered.slice((page-1)*PAGE,page*PAGE);
-  function submit(e:FormEvent){ e.preventDefault(); setApplied(query.trim()); if(query.trim()) setMode("history") }
+ async function toggleItem(opportunityId:string,itemId:string,checked:boolean){if(!supabase)return;const clientId=await resolveCurrentClientId();if(!clientId)return;const{data:auth}=await supabase.auth.getUser();if(!auth.user)return;const next=new Set(selected[opportunityId]??[]);checked?next.add(itemId):next.delete(itemId);setSelected(v=>({...v,[opportunityId]:next}));const{error}=await supabase.from("client_opportunity_item_selections").upsert({client_id:clientId,opportunity_id:opportunityId,item_id:itemId,selected:checked,selected_by:auth.user.id,selected_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"client_id,item_id"});if(error){checked?next.delete(itemId):next.add(itemId);setSelected(v=>({...v,[opportunityId]:new Set(next)}));setAnalysisMessage(m=>({...m,[opportunityId]:`Falha ao salvar seleção: ${error.message}`}))}}
 
-  async function validateHabilitation(r:Row){
-    if(!supabase) return;
-    const opportunityId=txt(r.opportunity_id), key=opportunityId||txt(r.process_number);
-    if(!opportunityId){ setHabilMessage(m=>({...m,[key]:"Este edital ainda não possui identificador operacional."})); return }
-    setHabilBusy(key); setHabilMessage(m=>({...m,[key]:"Conferindo habilitação geral e exigências específicas do edital..."}));
-    try{
-      const clientId=await resolveCurrentClientId(); if(!clientId) throw new Error("Cliente não associado.");
-      const overall=await supabase.from("client_habilitation_reviews").select("habilitado").eq("client_id",clientId).maybeSingle();
-      if(overall.error) throw overall.error;
-      if(overall.data?.habilitado!==true){ setHabilMessage(m=>({...m,[key]:"PENDENTE — o cadastro geral do cliente ainda não foi marcado como “Cliente habilitado” pelo Owner."})); return }
-      const {data,error:e}=await supabase.from("opportunity_requirements").select("id,title,description,requirement_kind,blocking,status,evidence_document_id,notes").eq("client_id",clientId).eq("opportunity_id",opportunityId).order("blocking",{ascending:false});
-      if(e) throw e;
-      const reqs=(data??[]) as Requirement[];
-      if(!reqs.length){ setHabilMessage(m=>({...m,[key]:"PENDENTE — cliente habilitado no cadastro geral, mas as exigências específicas deste edital ainda não foram estruturadas. Execute a Análise detalhada/extração dos anexos."})); return }
-      const evidenceIds=[...new Set(reqs.map(x=>x.evidence_document_id).filter(Boolean))] as string[];
-      let docs:CompanyDoc[]=[];
-      if(evidenceIds.length){
-        const {data:dd,error:de}=await supabase.from("client_documents").select("id,original_filename,validation_status,expiry_date,is_current").eq("client_id",clientId).in("id",evidenceIds);
-        if(de) throw de; docs=(dd??[]) as CompanyDoc[];
-      }
-      const byId=new Map(docs.map(d=>[d.id,d])); let ok=0,pending=0,blocking=0; const issues:string[]=[];
-      for(const req of reqs){
-        const status=norm(req.status), doc=req.evidence_document_id?byId.get(req.evidence_document_id):undefined;
-        const reqApproved=["atende","aprovado","approved","compliant"].includes(status);
-        let state:"ok"|"pending"|"blocking"="pending";
-        if(["impeditivo","reprovado","rejected","blocking"].includes(status)) state="blocking";
-        else if(doc){ if(doc.validation_status==="impeditivo"||expired(doc.expiry_date)) state="blocking"; else if(doc.validation_status==="atende"&&doc.is_current) state="ok"; }
-        else if(reqApproved) state="ok";
-        if(state==="ok") ok++; else if(state==="blocking"){ blocking++; issues.push(req.title) } else { pending++; if(req.blocking) issues.push(req.title) }
-      }
-      const result=blocking>0?"NÃO HABILITADO":pending>0?"PENDENTE":"HABILITADO";
-      const detail=`${result} — cadastro geral aprovado pelo Owner; ${ok} requisito(s) específico(s) atendido(s), ${pending} pendente(s), ${blocking} impeditivo(s).${issues.length?` Verificar: ${issues.slice(0,3).join("; ")}${issues.length>3?"…":""}`:""}`;
-      setHabilMessage(m=>({...m,[key]:detail}));
-    }catch(e){ setHabilMessage(m=>({...m,[key]:`Falha na validação: ${e instanceof Error?e.message:String(e)}`})) }
-    finally{ setHabilBusy("") }
-  }
+ async function validateHabilitation(r:Row){if(!supabase)return;const opportunityId=txt(r.opportunity_id),key=opportunityId||txt(r.process_number);if(!opportunityId){setHabilMessage(m=>({...m,[key]:"Este edital ainda não possui identificador operacional."}));return}setHabilBusy(key);setHabilMessage(m=>({...m,[key]:"Conferindo habilitação geral e exigências específicas do edital..."}));try{const clientId=await resolveCurrentClientId();if(!clientId)throw new Error("Cliente não associado.");const overall=await supabase.from("client_habilitation_reviews").select("habilitado").eq("client_id",clientId).maybeSingle();if(overall.error)throw overall.error;if(overall.data?.habilitado!==true){setHabilMessage(m=>({...m,[key]:"PENDENTE — cadastro geral ainda não habilitado pelo Owner."}));return}const{data,error:e}=await supabase.from("opportunity_requirements").select("id,title,description,requirement_kind,blocking,status,evidence_document_id,notes").eq("client_id",clientId).eq("opportunity_id",opportunityId).order("blocking",{ascending:false});if(e)throw e;const reqs=(data??[]) as Requirement[];if(!reqs.length){setHabilMessage(m=>({...m,[key]:"PENDENTE — cliente habilitado, mas as exigências específicas deste edital ainda não foram estruturadas."}));return}const evidenceIds=[...new Set(reqs.map(x=>x.evidence_document_id).filter(Boolean))] as string[];let docs:CompanyDoc[]=[];if(evidenceIds.length){const{data:dd,error:de}=await supabase.from("client_documents").select("id,original_filename,validation_status,expiry_date,is_current").eq("client_id",clientId).in("id",evidenceIds);if(de)throw de;docs=(dd??[]) as CompanyDoc[]}const byId=new Map(docs.map(d=>[d.id,d]));let ok=0,pending=0,blocking=0;const issues:string[]=[];for(const req of reqs){const status=norm(req.status),doc=req.evidence_document_id?byId.get(req.evidence_document_id):undefined,reqApproved=["atende","aprovado","approved","compliant"].includes(status);let state:"ok"|"pending"|"blocking"="pending";if(["impeditivo","reprovado","rejected","blocking"].includes(status))state="blocking";else if(doc){if(doc.validation_status==="impeditivo"||expired(doc.expiry_date))state="blocking";else if(doc.validation_status==="atende"&&doc.is_current)state="ok"}else if(reqApproved)state="ok";if(state==="ok")ok++;else if(state==="blocking"){blocking++;issues.push(req.title)}else{pending++;if(req.blocking)issues.push(req.title)}}const result=blocking>0?"NÃO HABILITADO":pending>0?"PENDENTE":"HABILITADO";setHabilMessage(m=>({...m,[key]:`${result} — ${ok} requisito(s) atendido(s), ${pending} pendente(s), ${blocking} impeditivo(s).${issues.length?` Verificar: ${issues.slice(0,3).join("; ")}`:""}`}))}catch(e){setHabilMessage(m=>({...m,[key]:`Falha na validação: ${e instanceof Error?e.message:String(e)}`}))}finally{setHabilBusy("")}}
 
-  async function detailedAnalysis(r:Row){
-    if(!supabase) return;
-    const opportunityId=txt(r.opportunity_id), capabilityId=txt(r.capability_id), key=opportunityId||txt(r.process_number);
-    if(!opportunityId||!capabilityId){ setAnalysisMessage(m=>({...m,[key]:"Este edital ainda não possui capacidade associada para análise."})); return }
-    setAnalysisBusy(key); setAnalysisMessage(m=>({...m,[key]:"Validando triagem e documentos..."}));
-    try{
-      const clientId=await resolveCurrentClientId(); if(!clientId) throw new Error("Cliente não associado.");
-      const [triageResponse,docsResponse]=await Promise.all([
-        supabase.from("opportunity_triage_runs").select("result,run_sequence").eq("capability_id",capabilityId).eq("opportunity_id",opportunityId).order("run_sequence",{ascending:false}).limit(1).maybeSingle(),
-        supabase.from("opportunity_documents").select("id",{count:"exact",head:true}).eq("client_id",clientId).eq("opportunity_id",opportunityId).eq("validation_status","available")
-      ]);
-      if(triageResponse.error) throw triageResponse.error;
-      if(docsResponse.error) throw docsResponse.error;
-      if(triageResponse.data?.result!=="queued_for_ai"){ setAnalysisMessage(m=>({...m,[key]:"A Análise detalhada só é liberada após a triagem aprovar o edital."})); return }
-      if((docsResponse.count??0)===0){ setAnalysisMessage(m=>({...m,[key]:"Nenhum anexo disponível. Sincronize ou anexe o edital/TR no dossiê antes da análise."})); return }
-      const {data,error:e}=await supabase.rpc("enqueue_opportunity_ai_analysis",{p_capability_id:capabilityId,p_opportunity_id:opportunityId,p_prompt_master_version:"Prompt Mestre v1.17"});
-      if(e) throw e;
-      setAnalysisMessage(m=>({...m,[key]:`Análise detalhada registrada (${String(data).slice(0,8)}…).`}));
-    }catch(e){ setAnalysisMessage(m=>({...m,[key]:`Não foi possível iniciar: ${e instanceof Error?e.message:String(e)}`})) }
-    finally{ setAnalysisBusy("") }
-  }
+ async function detailedAnalysis(r:Row){if(!supabase)return;const opportunityId=txt(r.opportunity_id),capabilityId=txt(r.capability_id),key=opportunityId||txt(r.process_number);if(!opportunityId||!capabilityId){setAnalysisMessage(m=>({...m,[key]:"Este edital ainda não possui capacidade associada para análise."}));return}setAnalysisBusy(key);setAnalysisMessage(m=>({...m,[key]:"Validando triagem, itens selecionados e documentos..."}));try{const clientId=await resolveCurrentClientId();if(!clientId)throw new Error("Cliente não associado.");const[itemCount,selectedCount,triageResponse,docsResponse]=await Promise.all([supabase.from("public_opportunity_items").select("id",{count:"exact",head:true}).eq("opportunity_id",opportunityId),supabase.from("client_opportunity_item_selections").select("item_id",{count:"exact",head:true}).eq("client_id",clientId).eq("opportunity_id",opportunityId).eq("selected",true),supabase.from("opportunity_triage_runs").select("result,run_sequence").eq("capability_id",capabilityId).eq("opportunity_id",opportunityId).order("run_sequence",{ascending:false}).limit(1).maybeSingle(),supabase.from("opportunity_documents").select("id",{count:"exact",head:true}).eq("client_id",clientId).eq("opportunity_id",opportunityId).eq("validation_status","available")]);for(const x of[itemCount,selectedCount,triageResponse,docsResponse])if(x.error)throw x.error;if((itemCount.count??0)>0&&(selectedCount.count??0)===0){setAnalysisMessage(m=>({...m,[key]:"Selecione ao menos um produto no botão “Abrir edital” antes de iniciar a Análise detalhada."}));return}if(triageResponse.data?.result!=="queued_for_ai"){setAnalysisMessage(m=>({...m,[key]:"A Análise detalhada só é liberada após a triagem aprovar o edital."}));return}if((docsResponse.count??0)===0){setAnalysisMessage(m=>({...m,[key]:"Nenhum anexo disponível. Sincronize ou anexe o edital/TR antes da análise."}));return}const{data,error:e}=await supabase.rpc("enqueue_opportunity_ai_analysis",{p_capability_id:capabilityId,p_opportunity_id:opportunityId,p_prompt_master_version:"Prompt Mestre v1.17"});if(e)throw e;setAnalysisMessage(m=>({...m,[key]:`Análise detalhada registrada para ${selectedCount.count??0} item(ns) selecionado(s) (${String(data).slice(0,8)}…).`}))}catch(e){setAnalysisMessage(m=>({...m,[key]:`Não foi possível iniciar: ${e instanceof Error?e.message:String(e)}`}))}finally{setAnalysisBusy("")}}
 
-  return <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 xl:p-8">
-    <div className="mb-5"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Editais</p><h1 className="mt-1 text-3xl font-bold">Editais em fluxo</h1><p className="mt-2 text-sm text-slate-500">Aqui ficam as oportunidades vinculadas ao cliente após entrarem no fluxo do UNI. Valide a habilitação específica do edital e, quando liberado, inicie a Análise detalhada.</p></div>
-    <div className="flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between"><div className="flex gap-2"><button onClick={()=>setMode("recent")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode==="recent"?"bg-blue-700 text-white":"bg-slate-100 text-slate-600"}`}>Recentes · 30 dias</button><button onClick={()=>setMode("history")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode==="history"?"bg-blue-700 text-white":"bg-slate-100 text-slate-600"}`}>Histórico · 12 meses</button></div><form onSubmit={submit} className="flex min-w-0 gap-2 lg:w-[560px]"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar órgão, processo, objeto, modalidade..." className="min-w-0 flex-1 rounded-xl border px-4 py-2.5 text-sm"/><button className="rounded-xl bg-blue-700 px-4 text-sm font-bold text-white">Pesquisar</button></form></div>
-    {error&&<div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
-    <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b px-5 py-4"><div><h2 className="font-bold">{mode==="recent"?"Editais recentes":"Histórico operacional"}</h2><p className="text-xs text-slate-500">{loading?"Atualizando...":`${filtered.length} editais encontrados`}</p></div><button onClick={()=>void load()} disabled={loading} className="rounded-lg border px-3 py-2 text-xs font-semibold">Atualizar</button></div>
-      <div className="overflow-x-auto"><table className="min-w-[1240px] w-full text-left text-xs"><thead className="bg-slate-50"><tr>{["Publicação","Órgão","Modalidade","Processo","Objeto","Valor estimado","Prazo","Situação","Ações"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y">
-        {visible.map((r,i)=>{ const key=txt(r.opportunity_id)||`${txt(r.process_number)}-${i}`; const portalUrl=txt(r.source_url); return <tr key={key} className="hover:bg-slate-50"><td className="px-4 py-3">{fd(r.publication_date)}</td><td className="px-4 py-3 font-semibold">{txt(r.buyer_name)||"—"}</td><td className="px-4 py-3">{txt(r.modality)||"—"}</td><td className="px-4 py-3">{txt(r.process_number)||"—"}</td><td className="max-w-[360px] truncate px-4 py-3">{txt(r.object_text||r.title)||"—"}</td><td className="px-4 py-3">{money(r.estimated_value)}</td><td className="px-4 py-3">{fd(r.proposal_deadline)}</td><td className="px-4 py-3">{txt(r.match_status)||txt(r.lifecycle)||"—"}</td><td className="px-4 py-3"><div className="flex flex-wrap gap-2">{portalUrl&&<a href={portalUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Acessar Portal</a>}<button onClick={()=>void validateHabilitation(r)} disabled={habilBusy===key} className="rounded-lg bg-blue-700 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50">{habilBusy===key?"Validando...":"Validar habilitação"}</button><button onClick={()=>void detailedAnalysis(r)} disabled={analysisBusy===key} className="rounded-lg bg-emerald-700 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50">{analysisBusy===key?"Validando...":"Análise detalhada"}</button></div>{habilMessage[key]&&<p className="mt-2 max-w-[330px] text-[10px] leading-4 text-slate-600">{habilMessage[key]}</p>}{analysisMessage[key]&&<p className="mt-1 max-w-[330px] text-[10px] leading-4 text-slate-500">{analysisMessage[key]}</p>}</td></tr> })}
-        {!loading&&visible.length===0&&<tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum edital nesta janela.</td></tr>}
-      </tbody></table></div>
-      <div className="flex items-center justify-between border-t px-5 py-4 text-xs"><span>Página {page} de {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Anterior</button><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Próxima</button></div></div>
-    </section>
-    <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-600"><b>Fluxo UNI:</b> Radar → Triagem → Editais → Validar habilitação → Análise detalhada. A validação específica do edital considera primeiro o cadastro geral aprovado pelo Owner e depois as exigências estruturadas daquela contratação.</div>
-  </div>
+ return <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 xl:p-8">
+  <div className="mb-5"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Editais</p><h1 className="mt-1 text-3xl font-bold">Editais em fluxo</h1><p className="mt-2 text-sm text-slate-500">Abra o edital, selecione os produtos de interesse e envie somente esses itens para a Análise detalhada.</p></div>
+  <div className="flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between"><div className="flex gap-2"><button onClick={()=>setMode("recent")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode==="recent"?"bg-blue-700 text-white":"bg-slate-100 text-slate-600"}`}>Recentes · 30 dias</button><button onClick={()=>setMode("history")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode==="history"?"bg-blue-700 text-white":"bg-slate-100 text-slate-600"}`}>Histórico · 12 meses</button></div><form onSubmit={submit} className="flex min-w-0 gap-2 lg:w-[560px]"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar órgão, processo, objeto, modalidade..." className="min-w-0 flex-1 rounded-xl border px-4 py-2.5 text-sm"/><button className="rounded-xl bg-blue-700 px-4 text-sm font-bold text-white">Pesquisar</button></form></div>
+  {error&&<div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
+  <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm"><div className="flex items-center justify-between border-b px-5 py-4"><div><h2 className="font-bold">{mode==="recent"?"Editais recentes":"Histórico operacional"}</h2><p className="text-xs text-slate-500">{loading?"Atualizando...":`${filtered.length} editais encontrados`}</p></div><button onClick={()=>void load()} disabled={loading} className="rounded-lg border px-3 py-2 text-xs font-semibold">Atualizar</button></div>
+   <div className="overflow-x-auto"><table className="min-w-[1240px] w-full text-left text-xs"><thead className="bg-slate-50"><tr>{["Publicação","Órgão","Modalidade","Processo","Objeto","Valor estimado","Prazo","Situação","Ações"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y">{visible.map((r,i)=>{const key=txt(r.opportunity_id)||`${txt(r.process_number)}-${i}`,opportunityId=txt(r.opportunity_id),portalUrl=txt(r.source_url),opened=openId===opportunityId,its=items[opportunityId]??[],sel=selected[opportunityId]??new Set<string>();return <><tr key={key} className="hover:bg-slate-50"><td className="px-4 py-3">{fd(r.publication_date)}</td><td className="px-4 py-3 font-semibold">{txt(r.buyer_name)||"—"}</td><td className="px-4 py-3">{txt(r.modality)||"—"}</td><td className="px-4 py-3">{txt(r.process_number)||"—"}</td><td className="max-w-[360px] truncate px-4 py-3">{txt(r.object_text||r.title)||"—"}</td><td className="px-4 py-3">{money(r.estimated_value)}</td><td className="px-4 py-3">{fd(r.proposal_deadline)}</td><td className="px-4 py-3">{txt(r.match_status)||txt(r.lifecycle)||"—"}</td><td className="px-4 py-3"><div className="flex flex-wrap gap-2"><button onClick={()=>void openEdital(r)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold text-slate-700">{opened?"Fechar edital":"Abrir edital"}</button>{portalUrl&&<a href={portalUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700">Acessar Portal</a>}<button onClick={()=>void validateHabilitation(r)} disabled={habilBusy===key} className="rounded-lg bg-blue-700 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50">{habilBusy===key?"Validando...":"Validar habilitação"}</button><button onClick={()=>void detailedAnalysis(r)} disabled={analysisBusy===key} className="rounded-lg bg-emerald-700 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50">{analysisBusy===key?"Validando...":"Análise detalhada"}</button></div>{habilMessage[key]&&<p className="mt-2 max-w-[360px] text-[10px] leading-4 text-slate-600">{habilMessage[key]}</p>}{analysisMessage[key]&&<p className="mt-1 max-w-[360px] text-[10px] leading-4 text-slate-500">{analysisMessage[key]}</p>}</td></tr>{opened&&<tr key={`${key}-detail`}><td colSpan={9} className="bg-slate-50 p-4"><div className="rounded-xl border bg-white p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-bold">Produtos do edital</h3><p className="mt-1 text-[11px] text-slate-500">Marque somente os produtos que devem seguir para a Análise detalhada.</p></div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">{sel.size} selecionado(s)</span></div>{itemsBusy===opportunityId?<p className="py-4 text-slate-500">Carregando itens...</p>:its.length===0?<p className="py-4 text-slate-500">Nenhum item estruturado foi encontrado para este edital.</p>:<div className="overflow-x-auto"><table className="min-w-[850px] w-full"><thead className="bg-slate-50"><tr><th className="px-3 py-2 text-left">Analisar</th><th className="px-3 py-2 text-left">Item</th><th className="px-3 py-2 text-left">Descrição</th><th className="px-3 py-2 text-left">Qtd.</th><th className="px-3 py-2 text-left">Un.</th><th className="px-3 py-2 text-left">Valor unit.</th><th className="px-3 py-2 text-left">Valor total</th></tr></thead><tbody className="divide-y">{its.map(it=><tr key={it.id}><td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={sel.has(it.id)} onChange={e=>void toggleItem(opportunityId,it.id,e.target.checked)}/></td><td className="px-3 py-2 font-bold">{it.item_number}</td><td className="max-w-[480px] px-3 py-2">{it.description}</td><td className="px-3 py-2">{it.quantity??"—"}</td><td className="px-3 py-2">{it.unit??"—"}</td><td className="px-3 py-2">{money(it.estimated_unit_value)}</td><td className="px-3 py-2">{money(it.estimated_total_value)}</td></tr>)}</tbody></table></div>}</div></td></tr>}</>})}{!loading&&visible.length===0&&<tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum edital nesta janela.</td></tr>}</tbody></table></div>
+   <div className="flex items-center justify-between border-t px-5 py-4 text-xs"><span>Página {page} de {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Anterior</button><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Próxima</button></div></div>
+  </section>
+ </div>
 }
