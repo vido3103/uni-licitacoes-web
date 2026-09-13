@@ -10,13 +10,12 @@ type Requirement = {id:string;title:string;description:string|null;requirement_k
 type CompanyDoc = {id:string;original_filename:string;validation_status:string;expiry_date:string|null;is_current:boolean};
 
 const PAGE = 12;
-const REFERENCE_NOW = Date.now();
 const txt = (v:unknown) => v == null ? "" : String(v);
 const norm = (v:unknown) => txt(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const dt = (v:unknown) => { const d = new Date(txt(v)); return Number.isNaN(d.getTime()) ? null : d };
 const fd = (v:unknown) => { const d = dt(v); return d ? new Intl.DateTimeFormat("pt-BR").format(d) : "—" };
 const money = (v:unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? new Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"}).format(n) : "Não informado" };
-const expired = (v:string|null) => { if(!v) return false; const d = new Date(`${v}T23:59:59`); return !Number.isNaN(d.getTime()) && d.getTime() < REFERENCE_NOW };
+const expired = (v:string|null) => { if(!v) return false; const d = new Date(`${v}T23:59:59`); return !Number.isNaN(d.getTime()) && d.getTime() < Date.now() };
 
 export default function Editais(){
   const [rows,setRows] = useState<Row[]>([]);
@@ -49,7 +48,7 @@ export default function Editais(){
   useEffect(()=>{ const q=sessionStorage.getItem("uni-global-search"); if(q){ sessionStorage.removeItem("uni-global-search"); setQuery(q); setApplied(q); setMode("history") } },[]);
 
   const filtered = useMemo(()=>{
-    const cut30=REFERENCE_NOW-30*86400000, cut12=new Date(REFERENCE_NOW), q=norm(applied); cut12.setFullYear(cut12.getFullYear()-1);
+    const now=Date.now(),cut30=now-30*86400000,cut12=new Date(now),q=norm(applied); cut12.setFullYear(cut12.getFullYear()-1);
     return rows.filter(r=>{
       const p=dt(r.publication_date)?.getTime()??0;
       if(mode==="recent"&&p<cut30) return false;
@@ -68,13 +67,16 @@ export default function Editais(){
     if(!supabase) return;
     const opportunityId=txt(r.opportunity_id), key=opportunityId||txt(r.process_number);
     if(!opportunityId){ setHabilMessage(m=>({...m,[key]:"Este edital ainda não possui identificador operacional."})); return }
-    setHabilBusy(key); setHabilMessage(m=>({...m,[key]:"Conferindo exigências e documentos da empresa..."}));
+    setHabilBusy(key); setHabilMessage(m=>({...m,[key]:"Conferindo habilitação geral e exigências específicas do edital..."}));
     try{
       const clientId=await resolveCurrentClientId(); if(!clientId) throw new Error("Cliente não associado.");
+      const overall=await supabase.from("client_habilitation_reviews").select("habilitado").eq("client_id",clientId).maybeSingle();
+      if(overall.error) throw overall.error;
+      if(overall.data?.habilitado!==true){ setHabilMessage(m=>({...m,[key]:"PENDENTE — o cadastro geral do cliente ainda não foi marcado como “Cliente habilitado” pelo Owner."})); return }
       const {data,error:e}=await supabase.from("opportunity_requirements").select("id,title,description,requirement_kind,blocking,status,evidence_document_id,notes").eq("client_id",clientId).eq("opportunity_id",opportunityId).order("blocking",{ascending:false});
       if(e) throw e;
       const reqs=(data??[]) as Requirement[];
-      if(!reqs.length){ setHabilMessage(m=>({...m,[key]:"As exigências de habilitação deste edital ainda não foram estruturadas. Execute a Análise detalhada/extração dos anexos antes de validar."})); return }
+      if(!reqs.length){ setHabilMessage(m=>({...m,[key]:"PENDENTE — cliente habilitado no cadastro geral, mas as exigências específicas deste edital ainda não foram estruturadas. Execute a Análise detalhada/extração dos anexos."})); return }
       const evidenceIds=[...new Set(reqs.map(x=>x.evidence_document_id).filter(Boolean))] as string[];
       let docs:CompanyDoc[]=[];
       if(evidenceIds.length){
@@ -92,7 +94,7 @@ export default function Editais(){
         if(state==="ok") ok++; else if(state==="blocking"){ blocking++; issues.push(req.title) } else { pending++; if(req.blocking) issues.push(req.title) }
       }
       const result=blocking>0?"NÃO HABILITADO":pending>0?"PENDENTE":"HABILITADO";
-      const detail=`${result} — ${ok} requisito(s) atendido(s), ${pending} pendente(s), ${blocking} impeditivo(s).${issues.length?` Verificar: ${issues.slice(0,3).join("; ")}${issues.length>3?"…":""}`:""}`;
+      const detail=`${result} — cadastro geral aprovado pelo Owner; ${ok} requisito(s) específico(s) atendido(s), ${pending} pendente(s), ${blocking} impeditivo(s).${issues.length?` Verificar: ${issues.slice(0,3).join("; ")}${issues.length>3?"…":""}`:""}`;
       setHabilMessage(m=>({...m,[key]:detail}));
     }catch(e){ setHabilMessage(m=>({...m,[key]:`Falha na validação: ${e instanceof Error?e.message:String(e)}`})) }
     finally{ setHabilBusy("") }
@@ -104,9 +106,10 @@ export default function Editais(){
     if(!opportunityId||!capabilityId){ setAnalysisMessage(m=>({...m,[key]:"Este edital ainda não possui capacidade associada para análise."})); return }
     setAnalysisBusy(key); setAnalysisMessage(m=>({...m,[key]:"Validando triagem e documentos..."}));
     try{
+      const clientId=await resolveCurrentClientId(); if(!clientId) throw new Error("Cliente não associado.");
       const [triageResponse,docsResponse]=await Promise.all([
         supabase.from("opportunity_triage_runs").select("result,run_sequence").eq("capability_id",capabilityId).eq("opportunity_id",opportunityId).order("run_sequence",{ascending:false}).limit(1).maybeSingle(),
-        supabase.from("opportunity_documents").select("id",{count:"exact",head:true}).eq("opportunity_id",opportunityId).eq("validation_status","available")
+        supabase.from("opportunity_documents").select("id",{count:"exact",head:true}).eq("client_id",clientId).eq("opportunity_id",opportunityId).eq("validation_status","available")
       ]);
       if(triageResponse.error) throw triageResponse.error;
       if(docsResponse.error) throw docsResponse.error;
@@ -131,6 +134,6 @@ export default function Editais(){
       </tbody></table></div>
       <div className="flex items-center justify-between border-t px-5 py-4 text-xs"><span>Página {page} de {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Anterior</button><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Próxima</button></div></div>
     </section>
-    <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-600"><b>Fluxo UNI:</b> Radar → Triagem → Editais → Validar habilitação → Análise detalhada. A validação específica do edital só declara HABILITADO quando os requisitos estruturados estiverem atendidos; ausência de requisito/documento permanece como pendência.</div>
+    <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-600"><b>Fluxo UNI:</b> Radar → Triagem → Editais → Validar habilitação → Análise detalhada. A validação específica do edital considera primeiro o cadastro geral aprovado pelo Owner e depois as exigências estruturadas daquela contratação.</div>
   </div>
 }
