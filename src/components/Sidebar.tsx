@@ -2,33 +2,31 @@
 
 type SidebarProps = { active:string; onNavigate:(module:string)=>void; showCliente?:boolean; ownerWorkspaceOnly?:boolean; isPlatformOwner?:boolean };
 
-export default function Sidebar({active,onNavigate,showCliente=false,ownerWorkspaceOnly=false,isPlatformOwner=false}:SidebarProps){
+export default function Sidebar({active,onNavigate,showCliente=false,ownerWorkspaceOnly=false}:SidebarProps){
   const items=ownerWorkspaceOnly
     ? [["Cliente","Painel Owner","◉"]]
     : [
-      ["Dashboard","Dashboard","⌂"],
-      ...(showCliente?[["Cliente","Cliente","◉"]]:[]),
-      ["Empresas","Empresas","◇"],
+      ["Dashboard","Visão geral","⌂"],
+      ...(showCliente?[["Cliente","Clientes","◉"]]:[]),
       ["SICAF","Habilitação","✓"],
-      ["Gate de Participação","Gate de Participação","◆"],
-      ["Radar","Radar de Licitações","◎"],
-      ["Editais","Editais","▤"],
-      ["CFP","CFP","🛒"],
-      ["Gate Econômico","Gate Econômico","▥"],
-      ["Disputa","Disputa","⚒"],
+      ["Radar","Radar","◎"],
+      ["Editais","Oportunidades","▤"],
+      ["CFP","Custos e preços","$"],
+      ["Gate Econômico","Decisão econômica","◆"],
+      ["Disputa","Disputa","↗"],
       ["Relatórios","Relatórios","▣"],
       ["Documentos","Documentos","□"],
       ["Fornecedores","Fornecedores","♙"],
       ["Configurações","Configurações","⚙"],
     ];
 
-  return <aside className="hidden min-h-screen w-[188px] shrink-0 flex-col bg-[#0d2742] text-white lg:flex">
-    <div className="flex h-[64px] items-center gap-2.5 border-b border-white/10 px-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 text-lg font-black shadow-lg">U</div>
-      <div><div className="text-base font-bold leading-none">UNI</div><div className="mt-1 text-xs text-slate-200">Licitações</div></div>
+  return <aside className="hidden min-h-screen w-[212px] shrink-0 flex-col border-r border-slate-800 bg-[#091b2d] text-white lg:flex">
+    <div className="flex h-[72px] items-center gap-3 border-b border-white/10 px-5">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-lg font-black shadow-lg shadow-blue-950/30">U</div>
+      <div><div className="text-base font-black leading-none tracking-tight">UNI</div><div className="mt-1 text-[11px] font-medium text-slate-300">Licitações</div></div>
     </div>
-    <nav className="flex-1 space-y-0.5 px-2 py-4">{items.map(([value,label,icon])=>{const selected=active===value;return <button key={value} type="button" onClick={()=>onNavigate(value)} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs transition ${selected?"bg-blue-600 font-semibold text-white shadow-md shadow-blue-950/20":"text-slate-200 hover:bg-white/10 hover:text-white"}`}><span className="w-4 text-center text-sm">{icon}</span><span>{label}</span></button>})}</nav>
-    <div className="mx-3 mb-3 rounded-lg border border-white/10 bg-white/5 p-3"><p className="text-xs font-semibold">{ownerWorkspaceOnly?"Ambiente do Owner":"Ambiente da empresa"}</p><p className="mt-1 text-[10px] leading-4 text-slate-300">{ownerWorkspaceOnly?"Selecione um cliente para acessar os módulos operacionais.":"Dados isolados pelo tenant autenticado."}</p></div>
-    <div className="flex items-center justify-between px-4 pb-4 text-[10px] text-slate-400"><span>Ambiente UNI</span><span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Online</span></div>
+    <div className="px-4 pt-5"><p className="px-2 text-[9px] font-bold uppercase tracking-[.18em] text-slate-500">{ownerWorkspaceOnly?"Administração":"Operação"}</p></div>
+    <nav className="flex-1 space-y-1 px-3 py-3">{items.map(([value,label,icon])=>{const selected=active===value;return <button key={value} type="button" onClick={()=>onNavigate(value)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs transition ${selected?"bg-blue-600 font-bold text-white shadow-lg shadow-blue-950/20":"font-medium text-slate-300 hover:bg-white/[.07] hover:text-white"}`}><span className="w-4 text-center text-sm opacity-90">{icon}</span><span>{label}</span></button>})}</nav>
+    <div className="m-3 rounded-xl border border-white/10 bg-white/[.04] p-3"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400"/><p className="text-[10px] font-bold">Sistema operacional</p></div><p className="mt-1.5 text-[9px] leading-4 text-slate-400">{ownerWorkspaceOnly?"Escolha um cliente para entrar no ambiente isolado.":"Ambiente isolado do cliente selecionado."}</p></div>
   </aside>
 }
