@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -18,5 +21,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Restore Next.js build cache
+        uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.[jt]s', 'src/**/*.[jt]sx', 'next.config.*') }}
+          restore-keys: |
+            ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-
       - run: npm ci
       - run: npm run check
