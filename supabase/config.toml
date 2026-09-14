@@ -1,0 +1,2 @@
+[functions.reset-client-tenant]
+verify_jwt = false
