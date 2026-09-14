@@ -19,9 +19,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Install current lint toolchain
+      - name: Align compatible lint toolchain
         run: |
-          npm install -D eslint@10.10.0 eslint-config-next@16.3.5
+          npm install -D eslint-config-next@16.3.5
       - name: Validate updated dependency set
         run: npm run check
       - name: Commit validated dependency updates
@@ -33,5 +33,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "chore(deps): update lint toolchain"
+          git commit -m "chore(deps): align Next lint configuration"
           git push
