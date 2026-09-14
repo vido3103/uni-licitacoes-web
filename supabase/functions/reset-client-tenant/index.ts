@@ -16,11 +16,27 @@ const C = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), {
     status: s,
     headers: { ...C, "content-type": "application/json", "cache-control": "no-store" },
   });
+
+function errDetail(e: unknown) {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const x = e as Record<string, unknown>;
+    const parts = [x.message, x.details, x.hint, x.code].filter(Boolean).map(String);
+    if (parts.length) return parts.join(" | ");
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
+}
 
 async function owner(req: Request) {
   const a = req.headers.get("authorization") || "";
@@ -61,7 +77,7 @@ Deno.serve(async (req) => {
 
   const b = await req.json().catch(() => ({}));
   if (b?.confirm !== "RESET_CLIENT_TENANT") return j({ error: "confirmation_required" }, 400);
-  const ids = Array.isArray(b?.client_ids) ? b.client_ids.map(String).filter(Boolean) : [];
+  const ids = Array.isArray(b?.client_ids) ? [...new Set(b.client_ids.map(String).filter(Boolean))] : [];
   if (!ids.length) return j({ error: "client_ids_required" }, 400);
 
   try {
@@ -98,22 +114,22 @@ Deno.serve(async (req) => {
       for (const [bucket, paths] of by) physical_removed += await rm(bucket, paths);
     }
 
-    for (const uid of authUsers) {
-      const { error: e } = await db.from("company_access_requests").delete().eq("user_id", uid);
-      if (e) throw e;
-    }
-
-    const { error: del } = await db.from("clients").delete().in("id", ids);
-    if (del) throw del;
+    const { data: resetResult, error: resetError } = await db.rpc(
+      "reset_client_tenants_preserving_audit",
+      { p_client_ids: ids, p_actor_user_id: u.id },
+    );
+    if (resetError) throw resetError;
 
     return j({
       ok: true,
       deleted_clients: clients,
       auth_users_preserved: authUsers,
       login_aliases_preserved: true,
+      append_only_history_preserved: true,
+      archived_history_rows: resetResult?.append_only_history_archived ?? null,
       physical_files_removed: physical_removed,
     });
   } catch (e) {
-    return j({ ok: false, error: "reset_failed", detail: e instanceof Error ? e.message : String(e) }, 500);
+    return j({ ok: false, error: "reset_failed", detail: errDetail(e) }, 500);
   }
 });
