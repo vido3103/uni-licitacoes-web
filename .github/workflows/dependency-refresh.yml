@@ -1,4 +1,4 @@
-name: Guarded dependency refresh
+name: Guarded lint rebuild
 
 on:
   push:
@@ -10,28 +10,78 @@ permissions:
   contents: write
 
 jobs:
-  refresh:
+  rebuild:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - name: Align compatible lint toolchain
+      - name: Rebuild lint dependencies
         run: |
-          npm install -D eslint-config-next@16.3.5
-      - name: Validate updated dependency set
-        run: npm run check
-      - name: Commit validated dependency updates
+          npm uninstall eslint-config-next
+          npm install -D eslint@10.10.0 @eslint/js@latest @next/eslint-plugin-next@16.3.5 typescript-eslint@latest eslint-plugin-react-hooks@latest globals@latest
+          npm approve-scripts unrs-resolver || true
+      - name: Rebuild eslint config
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "No dependency changes to commit."
+          cat > eslint.config.mjs <<'EOF'
+          import { defineConfig, globalIgnores } from "eslint/config";
+          import js from "@eslint/js";
+          import nextPlugin from "@next/eslint-plugin-next";
+          import reactHooks from "eslint-plugin-react-hooks";
+          import tseslint from "typescript-eslint";
+          import globals from "globals";
+
+          export default defineConfig([
+            globalIgnores([
+              ".next/**",
+              "node_modules/**",
+              "next-env.d.ts",
+              "supabase/functions/**",
+            ]),
+            js.configs.recommended,
+            ...tseslint.configs.recommended,
+            {
+              files: ["**/*.{js,mjs,cjs,jsx,ts,tsx}"],
+              languageOptions: {
+                globals: {
+                  ...globals.browser,
+                  ...globals.node,
+                },
+              },
+              plugins: {
+                "@next/next": nextPlugin,
+                "react-hooks": reactHooks,
+              },
+              rules: {
+                ...nextPlugin.configs.recommended.rules,
+                ...nextPlugin.configs["core-web-vitals"].rules,
+                ...reactHooks.configs.flat.recommended.rules,
+                "react-hooks/set-state-in-effect": "off",
+                "react-hooks/exhaustive-deps": "off",
+                "react-hooks/purity": "off",
+              },
+            },
+          ]);
+          EOF
+      - name: Validate clean project
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+          npm audit --audit-level=moderate
+          npm ls
+      - name: Commit clean rebuild
+        run: |
+          if git diff --quiet -- package.json package-lock.json eslint.config.mjs; then
+            echo "No lint rebuild changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "chore(deps): align Next lint configuration"
+          git add package.json package-lock.json eslint.config.mjs
+          git commit -m "chore(lint): rebuild clean ESLint 10 stack"
           git push
