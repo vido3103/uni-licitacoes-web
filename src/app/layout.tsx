@@ -26,9 +26,15 @@ export const metadata: Metadata = {
 const themeBootstrap = `
 (() => {
   const KEY = "uni-theme";
+  const BASELINE_KEY = "uni-theme-baseline";
+  const BASELINE = "approved-light-2026-09-14";
   const media = window.matchMedia("(prefers-color-scheme: dark)");
+  if (localStorage.getItem(BASELINE_KEY) !== BASELINE) {
+    localStorage.setItem(KEY, "light");
+    localStorage.setItem(BASELINE_KEY, BASELINE);
+  }
   const apply = () => {
-    const preference = localStorage.getItem(KEY) || "system";
+    const preference = localStorage.getItem(KEY) || "light";
     const isDark = preference === "dark" || (preference === "system" && media.matches);
     document.documentElement.classList.toggle("dark", isDark);
     document.documentElement.dataset.theme = preference;
@@ -36,7 +42,7 @@ const themeBootstrap = `
   apply();
   window.addEventListener("uni-theme-change", apply);
   media.addEventListener?.("change", () => {
-    if ((localStorage.getItem(KEY) || "system") === "system") apply();
+    if ((localStorage.getItem(KEY) || "light") === "system") apply();
   });
 })();
 `;
