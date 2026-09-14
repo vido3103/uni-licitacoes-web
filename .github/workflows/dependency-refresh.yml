@@ -19,10 +19,22 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Rebuild lint dependencies
+      - name: Rebuild dependency tree from clean manifest
         run: |
-          npm pkg delete devDependencies.eslint-config-next
-          npm install -D eslint@10.10.0 @eslint/js@latest @next/eslint-plugin-next@16.3.5 typescript-eslint@latest eslint-plugin-react-hooks@latest globals@latest
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("package.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          dev = data.setdefault("devDependencies", {})
+          dev.pop("eslint", None)
+          dev.pop("eslint-config-next", None)
+          data["allowScripts"] = {"unrs-resolver": True}
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+          rm -f package-lock.json
+          npm install -D eslint@10.10.0 @eslint/js@10.0.1 @next/eslint-plugin-next@16.3.5 typescript-eslint@8.70.0 eslint-plugin-react-hooks@latest globals@latest
       - name: Fix source issues exposed by strict lint
         run: |
           python - <<'PY'
@@ -30,32 +42,17 @@ jobs:
 
           replacements = {
               "src/modules/editais/Editais.tsx": [
-                  (
-                      "checked?next.add(itemId):next.delete(itemId);",
-                      "if(checked){next.add(itemId)}else{next.delete(itemId)};",
-                  ),
+                  ("checked?next.add(itemId):next.delete(itemId);", "if(checked){next.add(itemId)}else{next.delete(itemId)};"),
               ],
               "src/modules/oportunidades/OportunidadesUnified.tsx": [
-                  (
-                      "checked?next.add(id):next.delete(id);",
-                      "if(checked){next.add(id)}else{next.delete(id)};",
-                  ),
+                  ("checked?next.add(id):next.delete(id);", "if(checked){next.add(id)}else{next.delete(id)};"),
               ],
               "src/modules/radar/Radar.tsx": [
-                  (
-                      "checked?next.add(itemId):next.delete(itemId);",
-                      "if(checked){next.add(itemId)}else{next.delete(itemId)};",
-                  ),
-                  (
-                      "checked?rollback.delete(itemId):rollback.add(itemId);",
-                      "if(checked){rollback.delete(itemId)}else{rollback.add(itemId)};",
-                  ),
+                  ("checked?next.add(itemId):next.delete(itemId);", "if(checked){next.add(itemId)}else{next.delete(itemId)};"),
+                  ("checked?rollback.delete(itemId):rollback.add(itemId);", "if(checked){rollback.delete(itemId)}else{rollback.add(itemId)};"),
               ],
               "src/modules/sicaf/SicafHabilitacao.tsx": [
-                  (
-                      "let path=\"\";let previousCurrent:string[]=[];",
-                      "let path=\"\";let previousCurrent:string[];",
-                  ),
+                  ("let path=\"\";let previousCurrent:string[]=[];", "let path=\"\";let previousCurrent:string[];"),
               ],
           }
 
@@ -118,6 +115,7 @@ jobs:
           npm run build
           npm audit --audit-level=moderate
           npm ls
+          npm approve-scripts --allow-scripts-pending
       - name: Commit clean rebuild
         run: |
           git config user.name "github-actions[bot]"
