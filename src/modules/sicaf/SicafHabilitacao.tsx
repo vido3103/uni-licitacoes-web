@@ -46,7 +46,7 @@ export default function SicafHabilitacao(){
 
  async function upload(file:File|null){
   if(!file||!supabase||!clientId)return;setBusy(true);setMsg("");
-  let path="";let previousCurrent:string[]=[];
+  let path="";let previousCurrent:string[];
   try{
    const target=types.find(t=>t.id===form.typeId);if(!target)throw new Error("Selecione o tipo do documento.");
    if(file.size>50*1024*1024)throw new Error("Arquivo acima do limite de 50 MB.");
