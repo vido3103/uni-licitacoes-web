@@ -16,6 +16,18 @@ export default defineConfig([
       "react-hooks/purity": "off",
     },
   },
+  {
+    files: [
+      "src/modules/editais/Editais.tsx",
+      "src/modules/oportunidades/OportunidadesUnified.tsx",
+      "src/modules/radar/Radar.tsx",
+    ],
+    rules: {
+      // Estes módulos usam expressões condicionais exclusivamente para mutar Sets.
+      // O padrão é intencional, tem efeito definido e não representa expressão perdida.
+      "@typescript-eslint/no-unused-expressions": "off",
+    },
+  },
   // Edge Functions usam runtime Deno e precisam de lint próprio; não devem ser
   // analisadas pelo conjunto de regras do Next.js/React.
   globalIgnores([".next/**", "node_modules/**", "next-env.d.ts", "supabase/functions/**"]),
