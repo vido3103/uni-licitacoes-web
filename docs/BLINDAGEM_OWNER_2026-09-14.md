@@ -1,6 +1,7 @@
 # Blindagem do Fluxo Owner — UNI WEB
 
 Data: 14/09/2026
+Última revalidação técnica: 15/09/2026
 Escopo: ambiente Owner homologado.
 Status: BLINDADO.
 
@@ -39,26 +40,49 @@ Qualquer alteração futura no Owner deve ser rejeitada se:
 ## Controles técnicos verificados
 
 - Vercel production deployment: READY.
-- Next.js build: concluído.
-- TypeScript: concluído sem erro.
-- Runtime errors pós-deploy: nenhum encontrado.
-- Aplicação pública: HTTP 200.
+- Quality Gate do commit de produção: concluído com sucesso, incluindo lint, TypeScript, testes e build.
+- Runtime errors/fatal na produção nas últimas 24 horas: nenhum encontrado na revalidação de 15/09/2026.
 - `private.is_client_member()` mantém reconhecimento explícito do `platform_owner` ou membership de tenant.
 - `private.is_platform_owner()` valida papel ativo `platform_owner`.
 - Service Role não é exposta no frontend.
 
-## Ressalvas conhecidas e aceitas
+## Revalidação do Painel Owner — 15/09/2026
 
-O Supabase Advisor registra:
+A fonte de dados e os cálculos do Painel Owner foram novamente confrontados com o banco de produção:
+
+- Clientes: 1 cliente cadastrado, atualmente em implantação; 0 ativos.
+- Oportunidades no `client_radar_dashboard`: 0 no estado atual da base.
+- Resultados do Gate Econômico: 0; itens viáveis: 0; valor viável: R$ 0.
+- Documentos atuais: 1; pendências/críticos segundo a regra do painel: 0.
+- Pendências operacionais abertas: 0.
+- Cliente atual identificado pelo backend: LUVI EMPILHADEIRAS, em onboarding, com 1 membro e 1 documento atual.
+- O histórico de auditoria contém eventos recentes de revisão documental, sincronização SICAF e exclusão documental, confirmando atividade real no tenant.
+
+Os valores acima são coerentes com as consultas implementadas no `OwnerAdminV2`; não foram encontrados KPIs demonstrativos no Painel Owner. O estado vazio de oportunidades, Gate e pendências é atualmente um estado real do banco e deve ser exibido como zero, sem preenchimento artificial.
+
+## Segurança revalidada — 15/09/2026
+
+O Supabase Security Advisor continua registrando somente as ressalvas já conhecidas:
 
 - INFO: RLS habilitado sem policy em `company_access_requests`. A tabela permanece deliberadamente indisponível diretamente ao usuário e é operada pelo fluxo administrativo protegido.
 - INFO: RLS habilitado sem policy em `tenant_reset_append_only_archive`. O arquivo histórico permanece deliberadamente fechado ao cliente.
 - WARN: proteção nativa de senhas vazadas do Supabase Auth desativada. O UNI mantém política própria de senha forte no cadastro; ativação nativa dependerá da disponibilidade/configuração do plano Supabase.
 
-Essas ressalvas não reabrem a homologação do Owner e não autorizam redução de segurança.
+O Performance Advisor aponta índices ainda não utilizados. Como a base está em fase inicial e esses avisos não representam erro funcional, nenhum índice foi removido nesta homologação para evitar otimização prematura ou regressão futura.
+
+Referências de remediação do Advisor:
+- RLS sem policy: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+- Proteção de senhas vazadas: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+- Índices não utilizados: https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index
+
+## Limite da homologação automatizada
+
+A revalidação técnica cobre código, consultas e dados de produção, Quality Gate, deploy, runtime e advisors. A validação visual/interativa de uma sessão Owner autenticada continua dependendo de uma sessão de navegador do usuário. Se uma divergência visual ou de interação for observada nessa sessão, ela deve ser tratada como regressão e corrigida antes de avançar para a próxima página.
 
 ## Gate de continuidade
 
-Fluxo Owner: HOMOLOGADO E BLINDADO.
+Painel Owner: REVALIDADO E BLINDADO tecnicamente em 15/09/2026.
 
-A próxima etapa somente deve iniciar após confirmação do usuário. Até essa confirmação, alterações no Owner devem ser restritas a correções de regressão ou falhas observadas na homologação real.
+Fluxo Owner: permanece HOMOLOGADO E BLINDADO conforme baseline existente.
+
+A próxima página somente deve iniciar após a validação visual/interativa do Painel Owner pelo usuário ou confirmação expressa para prosseguir. Até essa confirmação, alterações no Owner devem ser restritas a correções de regressão ou falhas observadas na homologação real.
