@@ -1,0 +1,14 @@
+-- Production migration applied 2026-09-16 during Owner/Oportunidades deep homologation.
+-- Bootstraps the approved Luvi portfolio for already habilitated/ready clients.
+do $$
+declare v_client uuid; v_cat record; v_cap uuid; v_terms text[]; v_term text;
+begin
+ for v_client in select c.id from public.clients c join public.client_habilitation_reviews h on h.client_id=c.id and h.habilitado=true where c.status='ready' loop
+  for v_cat in select id,code from public.capability_categories where active and code in ('forklift_parts','automotive_parts','forklift_equipment','forklift_rental','lubricants','filters') loop
+   insert into public.client_capabilities(client_id,category_id,selected,status,suggested_by,legal_compatibility,evidence) values(v_client,v_cat.id,true,'habilitada','owner_habilitation','compatible',jsonb_build_object('source','owner_habilitation_bootstrap','method_version','Prompt Mestre v1.17')) on conflict(client_id,category_id) do update set selected=true,status='habilitada',updated_at=now() returning id into v_cap;
+   v_terms:=case v_cat.code when 'forklift_parts' then array['empilhadeira','empilhadeiras','peça para empilhadeira','peças para empilhadeiras'] when 'automotive_parts' then array['peça automotiva','peças automotivas','autopeça','autopeças','bateria automotiva','pneu automotivo','pneus automotivos'] when 'forklift_equipment' then array['aquisição de empilhadeira','aquisição de empilhadeiras','empilhadeira nova','empilhadeiras novas','paleteira','paleteiras'] when 'forklift_rental' then array['locação de empilhadeira','locação de empilhadeiras','aluguel de empilhadeira','aluguel de empilhadeiras'] when 'lubricants' then array['lubrificante','lubrificantes','óleo lubrificante','óleos lubrificantes','graxa','graxas','fluido automotivo','fluidos automotivos'] when 'filters' then array['filtro automotivo','filtros automotivos','filtro de óleo','filtro de ar','filtro de combustível','filtros industriais'] else array[]::text[] end;
+   foreach v_term in array v_terms loop insert into public.client_capability_match_terms(client_id,capability_id,term,term_kind,active) values(v_client,v_cap,v_term,'include',true) on conflict(client_id,capability_id,term,term_kind) do update set active=true; end loop;
+   insert into public.client_radar_enrollments(client_id,capability_id,monitoring_enabled,participation_enabled,initial_history_months,initial_load_status,incremental_sync_enabled,method_version) values(v_client,v_cap,true,true,12,'pending',true,'Prompt Mestre v1.17') on conflict(client_id,capability_id) do update set monitoring_enabled=true,participation_enabled=true,incremental_sync_enabled=true,method_version='Prompt Mestre v1.17',updated_at=now();
+  end loop;
+ end loop;
+end $$;
