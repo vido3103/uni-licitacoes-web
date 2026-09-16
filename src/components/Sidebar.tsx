@@ -8,11 +8,6 @@ type NavItem={value:string;label:string;icon:string};
 function selected(active:string,value:string){
   if(active===value)return true;
   if(value==="Painel"&&active==="Dashboard")return true;
-  if(value==="Oportunidades"&&(active==="Radar"||active==="Editais"))return true;
-  if(value==="Negócios"&&(active==="CFP"||active==="Gate Econômico"||active==="Gate de Participação"||active==="Disputa"))return true;
-  if(value==="Relatórios"&&active==="Inteligência")return false;
-  if(value==="Empresa"&&active==="Empresas")return true;
-  if(value==="Habilitação"&&active==="SICAF")return true;
   return false;
 }
 
@@ -22,12 +17,15 @@ export default function Sidebar({active,onNavigate,ownerWorkspaceOnly=false,isPl
  function toggle(){setCollapsed(v=>{const next=!v;window.localStorage.setItem("uni-sidebar-collapsed",next?"1":"0");return next})}
  function goHome(){onNavigate(ownerWorkspaceOnly?"Administração":"Painel")}
  const owner:NavItem[]=[
-  {value:"Administração",label:"Painel",icon:"⌂"},{value:"Clientes",label:"Clientes",icon:"●"},{value:"Oportunidades",label:"Oportunidades",icon:"⌕"},{value:"Negócios",label:"Negócios",icon:"▣"},{value:"Inteligência",label:"Inteligência",icon:"▥"},{value:"Habilitação",label:"Habilitação",icon:"▤"},{value:"Documentos",label:"Documentos",icon:"▱"},{value:"Usuários",label:"Usuários",icon:"♟"},{value:"Relatórios",label:"Relatórios",icon:"▥"},{value:"Configurações",label:"Configurações",icon:"⚙"}
+  {value:"Administração",label:"Painel",icon:"⌂"},{value:"Clientes",label:"Clientes",icon:"●"},{value:"Oportunidades",label:"Oportunidades",icon:"⌕"},{value:"Configurações",label:"Configurações",icon:"⚙"}
+ ];
+ const ownerClient:NavItem[]=[
+  {value:"Painel",label:"Painel",icon:"⌂"},{value:"Oportunidades",label:"Oportunidades",icon:"⌕"},{value:"Negócios",label:"Negócios",icon:"▣"},{value:"Inteligência",label:"Inteligência",icon:"▥"},{value:"Fornecedores",label:"Fornecedores",icon:"◇"},{value:"Configurações",label:"Configurações",icon:"⚙"},{value:"Administração",label:"Voltar ao Owner",icon:"↩"}
  ];
  const client:NavItem[]=[
-  {value:"Painel",label:"Painel",icon:"⌂"},{value:"Oportunidades",label:"Oportunidades",icon:"⌕"},{value:"Negócios",label:"Negócios",icon:"▣"},{value:"Inteligência",label:"Inteligência",icon:"▥"},{value:"Habilitação",label:"Habilitação",icon:"▤"},{value:"Documentos",label:"Documentos",icon:"▱"},{value:"Empresa",label:"Empresa",icon:"▦"},{value:"Fornecedores",label:"Fornecedores",icon:"◇"},{value:"Configurações",label:"Configurações",icon:"⚙"},...(isPlatformOwner?[{value:"Administração",label:"Voltar ao Owner",icon:"↩"}]:[])
+  {value:"Painel",label:"Painel",icon:"⌂"},{value:"Editais aprovados",label:"Editais aprovados",icon:"⌕"},{value:"Participações",label:"Participações",icon:"▣"},{value:"Resultados",label:"Resultados",icon:"▥"},{value:"Minha conta",label:"Minha conta",icon:"●"},{value:"Configurações",label:"Configurações",icon:"⚙"}
  ];
- const items=ownerWorkspaceOnly?owner:client;
+ const items=ownerWorkspaceOnly?owner:isPlatformOwner?ownerClient:client;
  return <aside className={`uni-sidebar hidden min-h-screen shrink-0 flex-col bg-[#002945] text-white transition-[width] duration-200 lg:flex ${collapsed?"w-[78px]":"w-[168px]"}`}>
   <div className={`flex min-h-[68px] items-center border-b border-white/10 ${collapsed?"justify-center px-2":"justify-between px-4"}`}>
    <button type="button" onClick={goHome} title="Voltar ao início" aria-label="Voltar ao Dashboard" className={`group flex items-center rounded-lg transition hover:bg-white/[.06] ${collapsed?"justify-center p-1":"gap-2 p-1"}`}>
