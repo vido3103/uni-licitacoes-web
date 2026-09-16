@@ -1,0 +1,2 @@
+-- A deterministic match queues analysis; it does not itself authorize participation.
+update public.client_opportunity_matches set participation_allowed=false,updated_at=now() where match_status='queued_for_analysis' and participation_allowed=true;
