@@ -1,1 +1,1 @@
-export { default } from "./OportunidadesUnified";
+export { default } from "./OportunidadesV2";
