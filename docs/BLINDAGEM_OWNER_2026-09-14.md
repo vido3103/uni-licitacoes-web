@@ -2,6 +2,7 @@
 
 Data: 14/09/2026
 Última revalidação técnica: 15/09/2026
+Validação visual/interativa do Painel Owner: APROVADA pelo usuário em 16/09/2026
 Escopo: ambiente Owner homologado.
 Status: BLINDADO.
 
@@ -75,14 +76,20 @@ Referências de remediação do Advisor:
 - Proteção de senhas vazadas: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
 - Índices não utilizados: https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index
 
+## Validação visual/interativa — 16/09/2026
+
+O usuário validou o Painel Owner em sessão autenticada e declarou explicitamente: **Painel aprovado**.
+
+Com isso, o Painel Owner encerra o ciclo combinado de validação técnica + validação visual/interativa e passa a integrar a baseline blindada. Qualquer alteração futura que modifique seu comportamento ou aparência aprovada deve ser tratada como potencial regressão e revalidada.
+
 ## Limite da homologação automatizada
 
-A revalidação técnica cobre código, consultas e dados de produção, Quality Gate, deploy, runtime e advisors. A validação visual/interativa de uma sessão Owner autenticada continua dependendo de uma sessão de navegador do usuário. Se uma divergência visual ou de interação for observada nessa sessão, ela deve ser tratada como regressão e corrigida antes de avançar para a próxima página.
+A revalidação técnica cobre código, consultas e dados de produção, Quality Gate, deploy, runtime e advisors. Para as páginas ainda não validadas visualmente, a validação visual/interativa de uma sessão Owner autenticada continua dependendo da sessão do usuário. Se uma divergência visual ou de interação for observada, ela deve ser tratada como regressão e corrigida antes de avançar para a página seguinte.
 
 ## Gate de continuidade
 
-Painel Owner: REVALIDADO E BLINDADO tecnicamente em 15/09/2026.
+Painel Owner: HOMOLOGADO, APROVADO E BLINDADO em 16/09/2026.
 
-Fluxo Owner: permanece HOMOLOGADO E BLINDADO conforme baseline existente.
+Próxima página do ciclo: **Clientes**.
 
-A próxima página somente deve iniciar após a validação visual/interativa do Painel Owner pelo usuário ou confirmação expressa para prosseguir. Até essa confirmação, alterações no Owner devem ser restritas a correções de regressão ou falhas observadas na homologação real.
+A página Clientes deve passar pela mesma sequência: validação técnica, backend/persistência/permissões, validação visual/interativa e blindagem antes de avançar para Oportunidades.
