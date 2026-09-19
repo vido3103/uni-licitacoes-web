@@ -20,7 +20,7 @@ const analysisLabel=(v:unknown)=>{const s=norm(v);if(s==="completed")return"Aná
 
 export default function OportunidadesUnified(){
  const[clientId,setClientId]=useState<string|null>(null),[rows,setRows]=useState<Row[]>([]),[selected,setSelected]=useState<Row|null>(null),[tab,setTab]=useState<Tab>("Resumo"),[query,setQuery]=useState(""),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- const[items,setItems]=useState<Row[]>([]),[docs,setDocs]=useState<Row[]>([]),[requirements,setRequirements]=useState<Row[]>([]),[analysis,setAnalysis]=useState<Row[]>([]),[selectedItems,setSelectedItems]=useState<Set<string>>(new Set()),[gate,setGate]=useState<Row|null>(null),[readiness,setReadiness]=useState<Row|null>(null),[analysisResults,setAnalysisResults]=useState<Row[]>([]);
+ const[items,setItems]=useState<Row[]>([]),[docs,setDocs]=useState<Row[]>([]),[requirements,setRequirements]=useState<Row[]>([]),[analysis,setAnalysis]=useState<Row[]>([]),[selectedItems,setSelectedItems]=useState<Set<string>>(new Set()),[gate,setGate]=useState<Row|null>(null),[_readiness,setReadiness]=useState<Row|null>(null),[_analysisResults,setAnalysisResults]=useState<Row[]>([]);
  const[cfpItems,setCfpItems]=useState<Row[]>([]),[quotes,setQuotes]=useState<Row[]>([]),[economic,setEconomic]=useState<Row[]>([]),[markup,setMarkup]=useState("30");
  const[strategies,setStrategies]=useState<Row[]>([]),[reviews,setReviews]=useState<Row[]>([]),[target,setTarget]=useState("30"),[floor,setFloor]=useState("25");
  const autoRan=useRef(new Set<string>()),deepLinked=useRef(false);
