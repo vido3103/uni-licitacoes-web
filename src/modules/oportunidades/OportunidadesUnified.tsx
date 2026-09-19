@@ -20,7 +20,7 @@ const analysisLabel=(v:unknown)=>{const s=norm(v);if(s==="completed")return"Aná
 
 export default function OportunidadesUnified(){
  const[clientId,setClientId]=useState<string|null>(null),[rows,setRows]=useState<Row[]>([]),[selected,setSelected]=useState<Row|null>(null),[tab,setTab]=useState<Tab>("Resumo"),[query,setQuery]=useState(""),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- const[items,setItems]=useState<Row[]>([]),[docs,setDocs]=useState<Row[]>([]),[requirements,setRequirements]=useState<Row[]>([]),[analysis,setAnalysis]=useState<Row[]>([]),[selectedItems,setSelectedItems]=useState<Set<string>>(new Set()),[gate,setGate]=useState<Row|null>(null);
+ const[items,setItems]=useState<Row[]>([]),[docs,setDocs]=useState<Row[]>([]),[requirements,setRequirements]=useState<Row[]>([]),[analysis,setAnalysis]=useState<Row[]>([]),[selectedItems,setSelectedItems]=useState<Set<string>>(new Set()),[gate,setGate]=useState<Row|null>(null),[readiness,setReadiness]=useState<Row|null>(null),[analysisResults,setAnalysisResults]=useState<Row[]>([]);
  const[cfpItems,setCfpItems]=useState<Row[]>([]),[quotes,setQuotes]=useState<Row[]>([]),[economic,setEconomic]=useState<Row[]>([]),[markup,setMarkup]=useState("30");
  const[strategies,setStrategies]=useState<Row[]>([]),[reviews,setReviews]=useState<Row[]>([]),[target,setTarget]=useState("30"),[floor,setFloor]=useState("25");
  const autoRan=useRef(new Set<string>()),deepLinked=useRef(false);
@@ -34,7 +34,7 @@ export default function OportunidadesUnified(){
   setSelected(r);if(!keepTab)setTab("Resumo");setMessage("");setBusy(true);setGate(null);
   const oid=String(r.opportunity_id||"");
   try{
-   const[ir,dr,rr,ar,sr,ci,ds,pr]=await Promise.all([
+   const[ir,dr,rr,ar,sr,ci,ds,pr,rd,ai]=await Promise.all([
     supabase.from("public_opportunity_items").select("*").eq("opportunity_id",oid).order("item_number"),
     supabase.from("opportunity_documents").select("id,original_filename,document_kind,validation_status,uploaded_at,official_source_url,storage_path").eq("client_id",clientId).eq("opportunity_id",oid).order("uploaded_at",{ascending:false}),
     supabase.from("opportunity_requirements").select("id,title,description,requirement_kind,blocking,status,notes").eq("client_id",clientId).eq("opportunity_id",oid).order("blocking",{ascending:false}),
@@ -42,10 +42,12 @@ export default function OportunidadesUnified(){
     supabase.from("client_opportunity_item_selections").select("item_id").eq("client_id",clientId).eq("opportunity_id",oid).eq("selected",true),
     supabase.from("cfp_items").select("*").eq("client_id",clientId).eq("opportunity_id",oid).order("item_number"),
     supabase.from("dispute_strategies").select("*").eq("client_id",clientId).eq("opportunity_id",oid),
-    supabase.from("post_dispute_reviews").select("*").eq("client_id",clientId).eq("opportunity_id",oid).order("opened_at",{ascending:false})
+    supabase.from("post_dispute_reviews").select("*").eq("client_id",clientId).eq("opportunity_id",oid).order("opened_at",{ascending:false}),
+     supabase.from("opportunity_readiness_evaluations").select("*").eq("client_id",clientId).eq("opportunity_id",oid).order("evaluated_at",{ascending:false}).limit(1),
+     supabase.from("opportunity_ai_analysis_results").select("*").eq("client_id",clientId).eq("opportunity_id",oid).order("created_at",{ascending:false}).limit(5)
    ]);
-   for(const x of[ir,dr,rr,ar,sr,ci,ds,pr])if(x.error)throw x.error;
-   setItems((ir.data??[])as Row[]);setDocs((dr.data??[])as Row[]);setRequirements((rr.data??[])as Row[]);setAnalysis((ar.data??[])as Row[]);setSelectedItems(new Set((sr.data??[]).map(x=>String(x.item_id))));setStrategies((ds.data??[])as Row[]);setReviews((pr.data??[])as Row[]);
+   for(const x of[ir,dr,rr,ar,sr,ci,ds,pr,rd,ai])if(x.error)throw x.error;
+   setItems((ir.data??[])as Row[]);setDocs((dr.data??[])as Row[]);setRequirements((rr.data??[])as Row[]);setAnalysis((ar.data??[])as Row[]);setSelectedItems(new Set((sr.data??[]).map(x=>String(x.item_id))));setStrategies((ds.data??[])as Row[]);setReviews((pr.data??[])as Row[]);setReadiness(((rd.data??[])[0]??null)as Row|null);setAnalysisResults((ai.data??[])as Row[]);
    const c=(ci.data??[])as Row[];setCfpItems(c);const ids=c.map(x=>String(x.id));
    if(ids.length){const[qr,gr]=await Promise.all([supabase.from("cfp_quotes").select("*").eq("client_id",clientId).in("item_id",ids),supabase.from("gate_economic_results").select("*").eq("client_id",clientId).eq("opportunity_id",oid)]);if(qr.error)throw qr.error;if(gr.error)throw gr.error;setQuotes((qr.data??[])as Row[]);setEconomic((gr.data??[])as Row[])}else{setQuotes([]);setEconomic([])}
   }catch(e){setMessage(e instanceof Error?e.message:String(e))}finally{setBusy(false)}
