@@ -16,12 +16,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "UNI Licitações",
-    template: "%s | UNI Licitações",
+    default: "Veence | V&S NASCIMENTO",
+    template: "%s | Veence",
   },
   description:
-    "Plataforma de inteligência e gestão de oportunidades em licitações públicas.",
-  applicationName: "UNI Licitações",
+    "Veence — plataforma de inteligência e gestão de oportunidades em licitações públicas da V&S NASCIMENTO.",
+  applicationName: "Veence",
 };
 
 const themeBootstrap = `
