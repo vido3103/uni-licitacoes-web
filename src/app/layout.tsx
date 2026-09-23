@@ -47,6 +47,17 @@ const themeBootstrap = `
 })();
 `;
 
+const organizationBootstrap = `
+(() => {
+  const ACTIVE_KEY = "veence-active-organization-id";
+  const LEGACY_OWNER_KEY = "uni-owner-client-id";
+  const legacy = sessionStorage.getItem(LEGACY_OWNER_KEY);
+  if (legacy && !sessionStorage.getItem(ACTIVE_KEY)) {
+    sessionStorage.setItem(ACTIVE_KEY, legacy);
+  }
+})();
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html
@@ -56,6 +67,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        <script dangerouslySetInnerHTML={{ __html: organizationBootstrap }} />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
