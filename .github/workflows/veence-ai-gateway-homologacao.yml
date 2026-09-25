@@ -1,0 +1,36 @@
+name: Veence AI Gateway Homologacao
+
+on:
+  push:
+    branches:
+      - veence/ai-gateway-homologacao
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veence-ai-gateway-homologacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Veence quality gate
+        run: npm run check
