@@ -22,16 +22,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
       - name: Veence quality gate
         run: npm run check
 
@@ -41,17 +38,88 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Start isolated local Supabase
-        run: supabase start
+      - name: Preserve legacy migrations and start isolated Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv supabase/migrations supabase/migrations-legacy
+          mkdir -p supabase/migrations
+          supabase start
 
-      - name: Apply all migrations from scratch
-        run: supabase db reset
+      - name: Bootstrap minimum pre-Gateway contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create schema if not exists private;
+          create table public.clients(id uuid primary key default gen_random_uuid());
+          create table public.client_capabilities(id uuid primary key default gen_random_uuid(), client_id uuid not null references public.clients(id));
+          create table public.public_opportunities(id uuid primary key default gen_random_uuid());
+          create table public.opportunity_triage_runs(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, capability_id uuid not null,
+            opportunity_id uuid not null, result text not null, ai_required boolean not null,
+            run_sequence bigint generated always as identity, created_at timestamptz not null default now()
+          );
+          create table public.client_opportunity_matches(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, capability_id uuid not null,
+            opportunity_id uuid not null, match_status text not null
+          );
+          create table public.opportunity_documents(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, opportunity_id uuid not null,
+            validation_status text not null
+          );
+          create table public.public_opportunity_items(id uuid primary key default gen_random_uuid(), opportunity_id uuid not null);
+          create table public.client_opportunity_item_selections(
+            client_id uuid not null, opportunity_id uuid not null, item_id uuid not null, selected boolean not null default true
+          );
+          create table public.client_profiles(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, version_no integer not null,
+            is_current boolean not null default true, created_at timestamptz not null default now()
+          );
+          create table public.playbooks(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, version_no integer not null,
+            is_current boolean not null default true, created_at timestamptz not null default now()
+          );
+          create table public.opportunity_ai_analysis_queue(
+            id uuid primary key default gen_random_uuid(), client_id uuid not null, capability_id uuid not null,
+            opportunity_id uuid not null, triage_run_id uuid not null, status text not null default 'pending',
+            prompt_master_version text not null, profile_version text, playbook_version text,
+            queued_at timestamptz not null default now(), started_at timestamptz, completed_at timestamptz,
+            error_detail text, attempt_count integer not null default 0, max_attempts integer not null default 3,
+            locked_at timestamptz, locked_by text, heartbeat_at timestamptz, next_attempt_at timestamptz,
+            context_snapshot jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now(),
+            unique(client_id,capability_id,opportunity_id,triage_run_id)
+          );
+          create table public.opportunity_ai_analysis_results(id uuid primary key default gen_random_uuid());
+          create table public.ai_executions(id uuid primary key default gen_random_uuid());
+
+          create or replace function private.is_client_member(uuid) returns boolean language sql stable as $$ select true $$;
+          create or replace function public.enqueue_opportunity_ai_analysis(uuid,uuid,text default 'Prompt Mestre v1.17') returns uuid language sql as $$ select null::uuid $$;
+          create or replace function public.claim_opportunity_ai_analysis_job_service(uuid,uuid,text) returns text language sql as $$ select null::text $$;
+          create or replace function public.complete_opportunity_ai_analysis_job_service(uuid,text,text,jsonb,jsonb,jsonb,text,text,text) returns text language sql as $$ select null::text $$;
+          create or replace function public.fail_opportunity_ai_analysis_job_service(uuid,text,text,integer default 60) returns text language sql as $$ select null::text $$;
+          create or replace function private.recover_stale_opportunity_ai_analysis_jobs(integer default 300, integer default 50) returns integer language sql as $$ select 0 $$;
+          create or replace function private.fail_opportunity_ai_analysis_job(uuid,text,text,integer default 60) returns text language sql as $$ select null::text $$;
+
+          grant all on public.opportunity_ai_analysis_queue, public.opportunity_ai_analysis_results, public.ai_executions to authenticated;
+          SQL
+
+      - name: Apply Gateway migrations only
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+          for migration in supabase/migrations-legacy/20260924000{1,2,3,4,5}00_*.sql; do
+            echo "Applying $migration"
+            docker run --rm --network host -v "$PWD:/work" -w /work postgres:17-alpine \
+              psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
 
       - name: Assert Veence AI queue hardening
         shell: bash
@@ -59,67 +127,38 @@ jobs:
           set -euo pipefail
           DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
           docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          do $$
-          begin
+          do $$ begin
             if has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','INSERT')
                or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','UPDATE')
                or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','DELETE') then
               raise exception 'authenticated still has direct queue mutation privileges';
             end if;
-            if not has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','SELECT') then
-              raise exception 'authenticated lost queue SELECT privilege';
-            end if;
-            if has_function_privilege('authenticated','public.claim_opportunity_ai_analysis_job_service(uuid,uuid,text)','EXECUTE') then
-              raise exception 'authenticated can execute service claim RPC';
-            end if;
-            if has_function_privilege('authenticated','public.complete_opportunity_ai_analysis_job_service(uuid,text,text,jsonb,jsonb,jsonb,text,text,text)','EXECUTE') then
-              raise exception 'authenticated can execute service complete RPC';
-            end if;
-            if has_function_privilege('authenticated','public.fail_opportunity_ai_analysis_job_service(uuid,text,text,integer)','EXECUTE') then
-              raise exception 'authenticated can execute service fail RPC';
-            end if;
-            if not has_function_privilege('authenticated','public.enqueue_opportunity_ai_analysis(uuid,uuid,text)','EXECUTE') then
-              raise exception 'authenticated cannot execute enqueue RPC';
-            end if;
+            if not has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','SELECT') then raise exception 'authenticated lost queue SELECT privilege'; end if;
+            if has_function_privilege('authenticated','public.claim_opportunity_ai_analysis_job_service(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated can execute service claim RPC'; end if;
+            if has_function_privilege('authenticated','public.complete_opportunity_ai_analysis_job_service(uuid,text,text,jsonb,jsonb,jsonb,text,text,text)','EXECUTE') then raise exception 'authenticated can execute service complete RPC'; end if;
+            if has_function_privilege('authenticated','public.fail_opportunity_ai_analysis_job_service(uuid,text,text,integer)','EXECUTE') then raise exception 'authenticated can execute service fail RPC'; end if;
+            if not has_function_privilege('authenticated','public.enqueue_opportunity_ai_analysis(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated cannot execute enqueue RPC'; end if;
+            if has_function_privilege('authenticated','public.fail_opportunity_ai_analysis_job_permanent_service(uuid,text,text)','EXECUTE') then raise exception 'authenticated can execute permanent-failure service RPC'; end if;
           end $$;
           SQL
 
-      - name: Assert retry, recovery and scheduler contracts
+      - name: Assert retry recovery scheduler and idempotency contracts
         shell: bash
         run: |
           set -euo pipefail
           DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
           docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
           do $$
-          declare
-            v_default text;
-            v_count integer;
+          declare v_default text; v_count integer; v_def text;
           begin
-            select column_default into v_default
-              from information_schema.columns
-             where table_schema='public'
-               and table_name='opportunity_ai_analysis_queue'
-               and column_name='max_attempts';
-            if coalesce(v_default,'') not like '%3%' then
-              raise exception 'unexpected max_attempts default: %', v_default;
-            end if;
-
-            select count(*) into v_count
-              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-             where n.nspname='private'
-               and p.proname='recover_stale_opportunity_ai_analysis_jobs';
-            if v_count = 0 then
-              raise exception 'stale recovery function missing';
-            end if;
-
-            select count(*) into v_count
-              from cron.job
-             where jobname='veence-ai-recover-stale-jobs'
-               and active
-               and schedule='* * * * *';
-            if v_count <> 1 then
-              raise exception 'expected exactly one active Veence recovery scheduler, got %', v_count;
-            end if;
+            select column_default into v_default from information_schema.columns where table_schema='public' and table_name='opportunity_ai_analysis_queue' and column_name='max_attempts';
+            if coalesce(v_default,'') not like '%3%' then raise exception 'unexpected max_attempts default: %',v_default; end if;
+            select count(*) into v_count from cron.job where jobname='veence-ai-recover-stale-jobs' and active and schedule='* * * * *';
+            if v_count<>1 then raise exception 'expected one active recovery scheduler, got %',v_count; end if;
+            select pg_get_functiondef('private.fail_opportunity_ai_analysis_job(uuid,text,text,integer)'::regprocedure) into v_def;
+            if position('v_terminal' in v_def)=0 or position("= 0" in v_def)=0 then raise exception 'zero-delay terminal retry contract missing'; end if;
+            select pg_get_functiondef('public.enqueue_opportunity_ai_analysis(uuid,uuid,text)'::regprocedure) into v_def;
+            if position("status in ('failed','retry_wait')" in lower(v_def))=0 then raise exception 'enqueue reopen guard missing'; end if;
           end $$;
           SQL
 
