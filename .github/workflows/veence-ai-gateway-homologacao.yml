@@ -54,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
-          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          docker run --rm -i --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
           create schema if not exists private;
           create table public.clients(id uuid primary key default gen_random_uuid());
           create table public.client_capabilities(id uuid primary key default gen_random_uuid(), client_id uuid not null references public.clients(id));
@@ -92,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
           DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
-          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          docker run --rm -i --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
           do $$ begin
             if has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','INSERT') or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','UPDATE') or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','DELETE') then raise exception 'authenticated still has direct queue mutation privileges'; end if;
             if not has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','SELECT') then raise exception 'authenticated lost queue SELECT privilege'; end if;
@@ -108,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
-          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          docker run --rm -i --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
           do $$
           declare v_default text; v_count integer; v_def text;
           begin
