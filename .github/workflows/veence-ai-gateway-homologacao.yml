@@ -34,3 +34,95 @@ jobs:
 
       - name: Veence quality gate
         run: npm run check
+
+  sql-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated local Supabase
+        run: supabase start
+
+      - name: Apply all migrations from scratch
+        run: supabase db reset
+
+      - name: Assert Veence AI queue hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          begin
+            if has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','INSERT')
+               or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','UPDATE')
+               or has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','DELETE') then
+              raise exception 'authenticated still has direct queue mutation privileges';
+            end if;
+            if not has_table_privilege('authenticated','public.opportunity_ai_analysis_queue','SELECT') then
+              raise exception 'authenticated lost queue SELECT privilege';
+            end if;
+            if has_function_privilege('authenticated','public.claim_opportunity_ai_analysis_job_service(uuid,uuid,text)','EXECUTE') then
+              raise exception 'authenticated can execute service claim RPC';
+            end if;
+            if has_function_privilege('authenticated','public.complete_opportunity_ai_analysis_job_service(uuid,text,text,jsonb,jsonb,jsonb,text,text,text)','EXECUTE') then
+              raise exception 'authenticated can execute service complete RPC';
+            end if;
+            if has_function_privilege('authenticated','public.fail_opportunity_ai_analysis_job_service(uuid,text,text,integer)','EXECUTE') then
+              raise exception 'authenticated can execute service fail RPC';
+            end if;
+            if not has_function_privilege('authenticated','public.enqueue_opportunity_ai_analysis(uuid,uuid,text)','EXECUTE') then
+              raise exception 'authenticated cannot execute enqueue RPC';
+            end if;
+          end $$;
+          SQL
+
+      - name: Assert retry, recovery and scheduler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+          docker run --rm --network host postgres:17-alpine psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          declare
+            v_default text;
+            v_count integer;
+          begin
+            select column_default into v_default
+              from information_schema.columns
+             where table_schema='public'
+               and table_name='opportunity_ai_analysis_queue'
+               and column_name='max_attempts';
+            if coalesce(v_default,'') not like '%3%' then
+              raise exception 'unexpected max_attempts default: %', v_default;
+            end if;
+
+            select count(*) into v_count
+              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+             where n.nspname='private'
+               and p.proname='recover_stale_opportunity_ai_analysis_jobs';
+            if v_count = 0 then
+              raise exception 'stale recovery function missing';
+            end if;
+
+            select count(*) into v_count
+              from cron.job
+             where jobname='veence-ai-recover-stale-jobs'
+               and active
+               and schedule='* * * * *';
+            if v_count <> 1 then
+              raise exception 'expected exactly one active Veence recovery scheduler, got %', v_count;
+            end if;
+          end $$;
+          SQL
+
+      - name: Stop isolated local Supabase
+        if: always()
+        run: supabase stop --no-backup
