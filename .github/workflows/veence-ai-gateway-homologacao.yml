@@ -119,7 +119,7 @@ jobs:
             select pg_get_functiondef('private.fail_opportunity_ai_analysis_job(uuid,text,text,integer)'::regprocedure) into v_def;
             if position('v_terminal' in v_def)=0 or position('= 0' in v_def)=0 then raise exception 'zero-delay terminal retry contract missing'; end if;
             select pg_get_functiondef('public.enqueue_opportunity_ai_analysis(uuid,uuid,text)'::regprocedure) into v_def;
-            if position('status in (''failed'', ''retry_wait'')' in lower(v_def))=0 and position('status = any' in lower(v_def))=0 then raise exception 'enqueue reopen guard missing'; end if;
+            if position('status in' in lower(v_def))=0 or position('failed' in lower(v_def))=0 or position('retry_wait' in lower(v_def))=0 then raise exception 'enqueue reopen guard missing'; end if;
           end $$;
           SQL
       - name: Stop isolated local Supabase
