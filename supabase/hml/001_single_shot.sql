@@ -7,6 +7,7 @@ create table if not exists hml.single_shot (
   queue_id uuid not null,
   reserved_at timestamptz not null default now()
 );
+alter table hml.single_shot enable row level security;
 
 revoke all on schema hml from public, anon, authenticated;
 revoke all on hml.single_shot from public, anon, authenticated;
