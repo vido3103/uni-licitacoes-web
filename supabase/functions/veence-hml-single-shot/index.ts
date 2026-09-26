@@ -7,7 +7,7 @@ const MAX_PDF_BYTES=8*1024*1024,MAX_TOTAL_PDF_BYTES=16*1024*1024;
 const db=createClient(U,S,{auth:{persistSession:false,autoRefreshToken:false}});
 const C={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type"};
 const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...C,"content-type":"application/json"}});
-const versionNumber=(v:unknown)=>{const m=String(v??"").match(/(\d+)$/);return m?Number(m[1]):null};
+const versionNumber=(v:unknown)=>{const m=String(v??"").match(/^v?(\d+)(?:\.\d+)?$/i);return m?Number(m[1]):null};
 const methodVersion=(v:unknown)=>{const m=String(v??"").match(/v\d+(?:\.\d+)?/i);return m?m[0].toLowerCase():null};
 const clamp100=(v:unknown)=>{const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):0};
 const suggestedRec=(v:unknown)=>{const x=String(v??"revisao_manual").toLowerCase();return ["aprovado","aprovado_com_ressalva","nao_aprovado","revisao_manual"].includes(x)?x:"revisao_manual"};
