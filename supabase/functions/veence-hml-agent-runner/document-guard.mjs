@@ -39,7 +39,7 @@ export function assessDocumentRead(result, expectedFilenames = []) {
   const incompleteRaw = Array.isArray(result.document_read_incomplete) ? result.document_read_incomplete : [];
   const incomplete = incompleteRaw.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).filter(Boolean);
   const failureText = resultFailureText(result);
-  const failureMarkers = ['ocr failed', 'ocr failure', 'parsing failed', 'could not be read', 'nao pode ser lido', 'não pode ser lido', 'leitura incompleta', 'document_read_incomplete'];
+  const failureMarkers = ['ocr failed', 'ocr failure', 'parsing failed', 'could not be read', 'nao pode ser lido', 'não pode ser lido', 'leitura incompleta'];
   if (failureMarkers.some((marker) => failureText.includes(marker))) incomplete.push('document_content_read_failure_reported');
   if (result.document_read_complete !== true) incomplete.push('document_read_complete_not_confirmed');
   const manifest = Array.isArray(result.document_read_manifest) ? result.document_read_manifest : [];
