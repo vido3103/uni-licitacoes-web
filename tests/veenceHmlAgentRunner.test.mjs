@@ -23,9 +23,10 @@ test('real agent runner is single-attempt and durable-idempotent', () => {
   assert.doesNotMatch(gateway, /fallback/i);
 });
 
-test('gateway keeps a safe reasoning-output budget and persists reported cost metadata', () => {
+test('gateway keeps safe reasoning-output headroom and persists reported cost metadata', () => {
   assert.match(gateway, /Math\.min\(Number\(timeoutMs\) \|\| 120000, 120000\)/);
-  assert.match(gateway, /Math\.max\(4096, Math\.min\(Number\(maxOutputTokens\) \|\| 4096, 4096\)\)/);
+  assert.match(gateway, /Math\.max\(8192, Math\.min\(Number\(maxOutputTokens\) \|\| 8192, 8192\)\)/);
+  assert.match(gateway, /Produza JSON compacto e objetivo/);
   assert.match(gateway, /reasoningTokens/);
   assert.match(gateway, /finishReason/);
   assert.match(gateway, /reportedCostUsd/);
