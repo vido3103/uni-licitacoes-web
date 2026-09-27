@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import OrganizationSelector from "@/components/OrganizationSelector";
+import ScopedOrganizationSelector from "@/components/ScopedOrganizationSelector";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -70,7 +70,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <script dangerouslySetInnerHTML={{ __html: organizationBootstrap }} />
       </head>
-      <body className="min-h-full flex flex-col"><OrganizationSelector />{children}</body>
+      <body className="min-h-full flex flex-col"><ScopedOrganizationSelector />{children}</body>
     </html>
   );
 }
