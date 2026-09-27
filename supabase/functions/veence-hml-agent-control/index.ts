@@ -35,7 +35,20 @@ Deno.serve(async(request)=>{
    p_user:auth.user.id,p_queue:queueId,p_request_key:input.request_key,p_workflow:workflow,p_allowed_agents:plan.gatewayAgents,
    p_max_calls:plan.maxCalls,p_max_cost:plan.maxCostUsd,p_ttl_minutes:15,
   });
-  if(error)return json({error:"authorization_failed"},500);return data?json({authorization:data,plan,executionEnabled:globalAiEnabled&&plan.executionReady}):json({error:"gate_denied",plan},409);
+  if(error)return json({error:"authorization_failed"},500);return data?json({authorization:data,plan,executionEnabled:false}):json({error:"gate_denied",plan},409);
+ }
+ if(action==="release"){
+  if(!uuid(input.authorization_id)||!uuid(input.release_key))return json({error:"release_request_invalid"},400);
+  if(!globalAiEnabled)return json({error:"ai_disabled"},503);
+  const{data:authorization,error:authorizationError}=await db.rpc("hml_agent_workflow_authorization_snapshot_service",{p_user:auth.user.id,p_queue:queueId});
+  if(authorizationError||!authorization||authorization.id!==input.authorization_id||authorization.status!=="pending")return json({error:"release_denied"},409);
+  let plan;try{plan=buildAgentPlan(String(authorization.workflow??""),snapshot.agents);}catch{return json({error:"release_denied"},409);}
+  if(!plan.executionReady)return json({error:"agents_not_active",plan},409);
+  const{data,error}=await db.rpc("hml_release_agent_workflow_authorization_service",{
+   p_user:auth.user.id,p_authorization:input.authorization_id,p_release_key:input.release_key,
+  });
+  if(error)return json({error:"release_failed"},500);
+  return data?json({authorization:data,plan,executionEnabled:true}):json({error:"release_denied",plan},409);
  }
  if(action==="revoke"){
   if(!uuid(input.authorization_id))return json({error:"authorization_id_required"},400);
