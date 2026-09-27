@@ -16,12 +16,11 @@ export async function callAgentGateway({ model, instructions, content, maxOutput
   if (!key) throw new AgentGatewayError('ai_gateway_auth_missing');
   const controller = new AbortController();
   const timeout = Math.max(1000, Math.min(Number(timeoutMs) || 120000, 120000));
-  // GPT-5-family reasoning tokens share the completion budget. HML previously
-  // allowed registry values below 4096, which can truncate an otherwise valid
-  // JSON response after the provider has already processed the paid request.
-  // Keep one deterministic 4096-token ceiling/floor; the operational gate and
-  // per-agent max_cost_usd remain the authoritative call/cost controls.
-  const maxTokens = Math.max(4096, Math.min(Number(maxOutputTokens) || 4096, 4096));
+  // GPT-5-family reasoning tokens share the completion budget. The real HML run
+  // reached the previous 4096-token ceiling with finish_reason=length, leaving
+  // otherwise valid JSON truncated. Keep deterministic headroom while the
+  // operational gate and per-agent max_cost_usd remain the call/cost controls.
+  const maxTokens = Math.max(8192, Math.min(Number(maxOutputTokens) || 8192, 8192));
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
@@ -30,7 +29,7 @@ export async function callAgentGateway({ model, instructions, content, maxOutput
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: instructions },
+          { role: 'system', content: `${instructions}\n\nProduza JSON compacto e objetivo. Evite repetir o contexto de entrada; registre apenas conclusões, evidências necessárias, incertezas, bloqueios e próximos passos do seu papel.` },
           { role: 'user', content: typeof content === 'string' ? content : JSON.stringify(content) },
         ],
         stream: false,
