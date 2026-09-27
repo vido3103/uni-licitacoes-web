@@ -45,6 +45,9 @@ export type HmlAgentWorkflowAuthorization = {
   clientId: string | null;
   queueId: string | null;
   createdAt: string | null;
+  executionReleased: boolean;
+  executionReleasedAt: string | null;
+  executionReleasedBy: string | null;
   reused: boolean;
 };
 
@@ -62,7 +65,7 @@ export type HmlAgentControlStatus = {
   }>;
 };
 
-type AgentControlAction = "status" | "plan" | "authorize" | "revoke";
+type AgentControlAction = "status" | "plan" | "authorize" | "release" | "revoke";
 type AgentControlTransport = Pick<HmlTransport, "invoke">;
 type ErrorContext = { status?: number; clone?: () => ErrorContext; json?: () => Promise<unknown> };
 
@@ -122,6 +125,8 @@ function normalizeAuthorization(value: unknown): HmlAgentWorkflowAuthorization |
   const rawAgents = item.allowedAgents ?? item.allowed_agents;
   const allowedAgents = Array.isArray(rawAgents) ? rawAgents.filter((agent): agent is string => typeof agent === "string") : [];
   const workflow = text(item.workflow);
+  const executionReleasedAt = text(item.executionReleasedAt ?? item.execution_released_at);
+  const executionReleasedBy = text(item.executionReleasedBy ?? item.execution_released_by);
   return {
     id,
     status: status as HmlAgentWorkflowAuthorization["status"],
@@ -136,6 +141,9 @@ function normalizeAuthorization(value: unknown): HmlAgentWorkflowAuthorization |
     clientId: text(item.clientId ?? item.client_id),
     queueId: text(item.queueId ?? item.queue_id),
     createdAt: text(item.createdAt ?? item.created_at),
+    executionReleased: item.executionReleased === true || Boolean(executionReleasedAt),
+    executionReleasedAt,
+    executionReleasedBy,
     reused: item.reused === true,
   };
 }
@@ -145,11 +153,7 @@ export async function hmlAgentControlStatus(auth: HmlAuth, transport: AgentContr
   return { ...response, authorization: normalizeAuthorization(response.authorization) } as HmlAgentControlStatus;
 }
 
-export async function hmlAgentPlan(
-  auth: HmlAuth,
-  transport: AgentControlTransport,
-  workflow: HmlWorkflow,
-) {
+export async function hmlAgentPlan(auth: HmlAuth, transport: AgentControlTransport, workflow: HmlWorkflow) {
   const response = await request(auth, transport, "plan", { workflow });
   return (response as { plan: HmlAgentPlan }).plan;
 }
@@ -161,13 +165,27 @@ export async function hmlAuthorizeAgentWorkflow(
   requestKey: string,
 ) {
   const response = await request(auth, transport, "authorize", { workflow, request_key: requestKey }) as {
-    authorization?: unknown;
-    plan?: HmlAgentPlan;
-    executionEnabled?: boolean;
+    authorization?: unknown; plan?: HmlAgentPlan; executionEnabled?: boolean;
   };
   const authorization = normalizeAuthorization(response.authorization);
   if (!authorization || !response.plan) throw new Error("authorization_not_pending");
   return { authorization, plan: response.plan, executionEnabled: response.executionEnabled === true };
+}
+
+export async function hmlReleaseAgentWorkflow(
+  auth: HmlAuth,
+  transport: AgentControlTransport,
+  authorizationId: string,
+  releaseKey: string,
+) {
+  const response = await request(auth, transport, "release", { authorization_id: authorizationId, release_key: releaseKey }) as {
+    authorization?: unknown; plan?: HmlAgentPlan; executionEnabled?: boolean;
+  };
+  const authorization = normalizeAuthorization(response.authorization);
+  if (!authorization || !authorization.executionReleased || !response.plan || response.executionEnabled !== true) {
+    throw new Error("release_not_confirmed");
+  }
+  return { authorization, plan: response.plan, executionEnabled: true as const };
 }
 
 export async function hmlRevokeAgentWorkflow(
