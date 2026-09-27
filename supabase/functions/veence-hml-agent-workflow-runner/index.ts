@@ -21,13 +21,13 @@ Deno.serve(async (request) => {
   const queueId = Deno.env.get("VEENCE_HML_QUEUE_ID") ?? "";
   if (!uuid(queueId)) return json({ error: "hml_queue_not_configured" }, 503);
 
-  // O schema hml não é exposto pelo PostgREST. Leia a autorização somente pela RPC
-  // service já usada pelo painel/controle; isso mantém o schema privado e evita PGRST106.
-  const [{ data: gate, error: gateError }, { data: queue, error: queueError }] = await Promise.all([
-    db.rpc("hml_agent_workflow_authorization_snapshot_service", { p_user: auth.user.id, p_queue: queueId }),
-    db.from("opportunity_ai_analysis_queue").select("id,client_id,status,context_snapshot").eq("id", queueId).maybeSingle(),
-  ]);
-  if (gateError || queueError || !gate || !queue) return json({ error: "workflow_gate_unavailable" }, 409);
+  // Keep service-role PostgREST calls serialized. The control function already uses
+  // this pattern successfully; concurrent calls on the same service client produced
+  // an intermittent PGRST303 on the gate snapshot while the queue read succeeded.
+  const { data: gate, error: gateError } = await db.rpc("hml_agent_workflow_authorization_snapshot_service", { p_user: auth.user.id, p_queue: queueId });
+  if (gateError || !gate) return json({ error: "workflow_gate_unavailable" }, 409);
+  const { data: queue, error: queueError } = await db.from("opportunity_ai_analysis_queue").select("id,client_id,status,context_snapshot").eq("id", queueId).maybeSingle();
+  if (queueError || !queue) return json({ error: "workflow_queue_unavailable" }, 409);
   if (gate.id !== authorizationId) return json({ error: "workflow_gate_mismatch" }, 409);
   if (gate.authorized_by !== auth.user.id || gate.client_id !== queue.client_id || gate.queue_id !== queueId) return json({ error: "forbidden" }, 403);
   if (gate.status !== "pending" || Number(gate.consumed_calls) !== 0 || !gate.execution_released_at || !gate.execution_released_by) return json({ error: "workflow_gate_not_released" }, 409);
