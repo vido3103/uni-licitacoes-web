@@ -155,19 +155,19 @@ export default function VeenceHmlPage() {
     try {
       const result = await hmlAuthorizeAgentWorkflow(veenceHml.auth, veenceHml.functions, workflow, requestKey);
       if (result.authorization.status !== "pending") throw new Error("authorization_not_pending");
-      setMessage(`Gate multiagente preparado para ${WORKFLOW_LABELS[workflow]}. Nenhuma IA foi chamada e nenhuma execução foi iniciada.`);
+      setMessage(result.executionEnabled
+        ? `Gate multiagente preparado para ${WORKFLOW_LABELS[workflow]}. A execução está tecnicamente liberada, mas nenhuma IA foi chamada e nenhuma execução foi iniciada.`
+        : `Gate multiagente preparado para ${WORKFLOW_LABELS[workflow]}. A execução continua bloqueada; nenhuma IA foi chamada e nenhuma execução foi iniciada.`);
       await loadStatus();
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      setMessage(code === "ai_disabled"
-        ? "O kill switch global está bloqueado. O gate multiagente não foi criado e nenhuma IA foi chamada."
-        : code === "agents_not_ready"
-          ? "O plano possui agentes ainda inativos ou sem modelo. O gate não foi criado e nenhuma IA foi chamada."
-          : code === "workflow_budget_invalid"
-            ? "O orçamento do fluxo excede a política HML. O gate não foi criado."
-            : code === "gate_denied"
-              ? "Já existe um gate pendente diferente ou a autorização foi negada. Revise/revogue o gate atual antes de preparar outro."
-              : "Não foi possível preparar o gate multiagente. Nenhuma IA foi chamada.");
+      setMessage(code === "agents_not_configured"
+        ? "O plano possui agente Gateway sem modelo ou orçamento válido. O gate não foi criado e nenhuma IA foi chamada."
+        : code === "workflow_budget_invalid"
+          ? "O orçamento do fluxo excede a política HML. O gate não foi criado."
+          : code === "gate_denied"
+            ? "Já existe um gate pendente diferente ou a autorização foi negada. Revise/revogue o gate atual antes de preparar outro."
+            : "Não foi possível preparar o gate multiagente. Nenhuma IA foi chamada.");
     } finally {
       setControlBusy(false);
     }
@@ -237,7 +237,7 @@ export default function VeenceHmlPage() {
 
             <div className="rounded border border-cyan-500/50 bg-cyan-950/20 p-4">
               <h2 className="font-bold text-cyan-100">Planejador e gate multiagente</h2>
-              <p className="mt-1 text-slate-300">Escolha o fluxo para revisar agentes, ordem e orçamento. O botão de preparação apenas registra uma autorização auditável por 15 minutos; não chama o AI Gateway e não inicia execução.</p>
+              <p className="mt-1 text-slate-300">Escolha o fluxo para revisar agentes, ordem e orçamento. Preparar o gate apenas registra uma autorização auditável por 15 minutos. O kill switch e o estado ativo dos agentes são verificados separadamente na execução real.</p>
               <label className="mt-3 block font-medium">Fluxo
                 <select className="mt-1 block w-full rounded border border-slate-600 bg-slate-950 p-2" value={workflow}
                   onChange={event => setWorkflow(event.target.value as HmlWorkflow)} disabled={planBusy || controlBusy}>
@@ -245,10 +245,11 @@ export default function VeenceHmlPage() {
                 </select>
               </label>
               {planBusy ? <p className="mt-3">Montando plano determinístico…</p> : agentPlan ? <div className="mt-4 space-y-3">
-                <div className="grid gap-2 sm:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-5">
                   <p className="rounded bg-slate-950/60 p-2"><strong>Chamadas Gateway</strong><br />{agentPlan.maxCalls}</p>
                   <p className="rounded bg-slate-950/60 p-2"><strong>Teto agregado</strong><br />US$ {agentPlan.maxCostUsd.toFixed(2)}</p>
-                  <p className="rounded bg-slate-950/60 p-2"><strong>Pronto para gate</strong><br />{agentPlan.ready && agentControl?.globalAiEnabled ? "sim" : "não"}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Pronto para gate</strong><br />{agentPlan.gateReady ? "sim" : "não"}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Execução real</strong><br />{agentPlan.executionReady && agentControl?.globalAiEnabled ? "liberada" : "bloqueada"}</p>
                   <p className="rounded bg-slate-950/60 p-2"><strong>Decisão final</strong><br />humana</p>
                 </div>
                 <ol className="space-y-2">
@@ -256,8 +257,8 @@ export default function VeenceHmlPage() {
                     <strong>{step.order}. {step.code}</strong> · {step.mode === "gateway" ? "AI Gateway" : "local"} · {step.model || "sem modelo"} · teto US$ {step.maxCostUsd.toFixed(2)} · {step.enabled ? "ativo" : "inativo"}
                   </li>)}
                 </ol>
-                <p className="text-xs text-slate-400">Escrita externa: {agentPlan.externalWritesAllowed ? "permitida" : "bloqueada"}. O gate só pode ser preparado quando todos os agentes Gateway do plano estiverem configurados/ativos e o kill switch global permitir.</p>
-                <button className="rounded bg-cyan-700 p-2 font-semibold disabled:bg-slate-600" disabled={controlBusy || workflowGatePending || !agentPlan.ready || !agentControl?.globalAiEnabled} onClick={() => void prepareAgentWorkflowGate()}>
+                <p className="text-xs text-slate-400">Escrita externa: {agentPlan.externalWritesAllowed ? "permitida" : "bloqueada"}. O gate pode ser preparado com o kill switch fechado e agentes inativos, desde que modelo e orçamento estejam configurados. A execução real permanece fail-closed até kill switch e agentes estarem ativos.</p>
+                <button className="rounded bg-cyan-700 p-2 font-semibold disabled:bg-slate-600" disabled={controlBusy || workflowGatePending || !agentPlan.gateReady} onClick={() => void prepareAgentWorkflowGate()}>
                   Preparar gate multiagente · sem executar IA
                 </button>
               </div> : <p className="mt-3 text-amber-200">Plano indisponível. Nenhuma IA foi chamada.</p>}
