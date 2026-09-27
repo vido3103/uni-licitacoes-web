@@ -12,7 +12,7 @@ export class AgentGatewayError extends Error {
 }
 
 function compactInstruction(instructions) {
-  return `${instructions}\n\nProduza JSON compacto e objetivo. Evite repetir o contexto de entrada; registre apenas conclusões, evidências necessárias, incertezas, bloqueios e próximos passos do seu papel.`;
+  return `${instructions}\n\nProduza JSON compacto e objetivo. Evite repetir o contexto de entrada; registre apenas conclusões, evidências necessárias, incertezas, bloqueios e próximos passos do seu papel. Não repita pendências pertencentes a outros agentes salvo quando forem dependência direta do seu próprio resultado.`;
 }
 
 function responseOutputText(body) {
@@ -39,11 +39,8 @@ export async function callAgentGateway({ model, instructions, content, files = [
   if (!key) throw new AgentGatewayError('ai_gateway_auth_missing');
   const controller = new AbortController();
   const timeout = Math.max(1000, Math.min(Number(timeoutMs) || 120000, 120000));
-  // GPT-5-family reasoning tokens share the completion budget. The real HML run
-  // reached the previous 4096-token ceiling with finish_reason=length, leaving
-  // otherwise valid JSON truncated. Keep deterministic headroom while the
-  // operational gate and per-agent max_cost_usd remain the call/cost controls.
-  const maxTokens = Math.max(8192, Math.min(Number(maxOutputTokens) || 8192, 8192));
+  const requestedTokens = Number(maxOutputTokens);
+  const maxTokens = Math.max(1024, Math.min(Number.isFinite(requestedTokens) ? requestedTokens : 4096, 4096));
   const timer = setTimeout(() => controller.abort(), timeout);
   const normalizedFiles = Array.isArray(files)
     ? files.filter((file) => file && typeof file.url === 'string' && /^https:\/\//i.test(file.url) && file.mimeType === 'application/pdf').slice(0, 5)
