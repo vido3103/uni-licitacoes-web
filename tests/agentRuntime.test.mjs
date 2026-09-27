@@ -50,3 +50,23 @@ test('ambiguous timeout is terminal and never retries or falls back', async () =
   assert.equal(calls, 1);
   assert.deepEqual(store.events, ['reserved', 'failed']);
 });
+
+test('provider usage and cost are handed to durable completion exactly once', async () => {
+  const store = makeStore(); let persisted;
+  store.finish = async (key, result) => { store.events.push('completed'); persisted = { key, result }; };
+  const response = { requestId: 'provider-request', model: agent.model, inputTokens: 100,
+    outputTokens: 30, reportedCostUsd: 0.001, result: { recommendation: 'revisao_manual' } };
+  assert.deepEqual(await runAgentOnce(true, agent, request, store, { async infer() { return response; } }), response);
+  assert.deepEqual(persisted, { key: request.invocationKey, result: response });
+  assert.deepEqual(store.events, ['reserved', 'completed']);
+});
+
+test('persist failure cannot cause a second provider request', async () => {
+  const store = makeStore(); let calls = 0;
+  store.finish = async () => { throw new Error('storage_unavailable'); };
+  const provider = { async infer() { calls++; return { model: agent.model }; } };
+  await assert.rejects(runAgentOnce(true, agent, request, store, provider), /storage_unavailable/);
+  await assert.rejects(runAgentOnce(true, agent, request, store, provider), /invocation_already_reserved/);
+  assert.equal(calls, 1);
+  assert.deepEqual(store.events, ['reserved']);
+});
