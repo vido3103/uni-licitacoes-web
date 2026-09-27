@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { veenceHml } from "@/lib/veenceHmlClient";
 import { currentHmlIdentity } from "@/lib/veenceHmlSession";
 import { hmlAgentControlStatus, type HmlAgentWorkflowAuthorization } from "@/lib/veenceHmlAgentControl";
@@ -45,6 +45,8 @@ async function invokeWorkflow(authorizationId: string) {
 export default function ExecutarMultiagentePage() {
   const [ready, setReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [gate, setGate] = useState<HmlAgentWorkflowAuthorization | null>(null);
   const [globalAiEnabled, setGlobalAiEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -73,8 +75,26 @@ export default function ExecutarMultiagentePage() {
 
   useEffect(() => {
     if (!authenticated) return;
-    void refresh().catch(() => setMessage("Não foi possível consultar o gate. Volte à tela principal e entre novamente."));
+    void refresh().catch(() => setMessage("Não foi possível consultar o gate. Entre novamente nesta tela ou volte ao painel HML."));
   }, [authenticated, refresh]);
+
+  async function signIn(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const { error } = await veenceHml.auth.signInWithPassword({ email: email.trim(), password });
+      setPassword("");
+      if (error) throw error;
+      setAuthenticated(true);
+      setMessage("Sessão HML autenticada. Nenhuma IA foi executada.");
+    } catch {
+      setMessage("Acesso não autorizado. Confira os dados do usuário HML.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const executable = Boolean(gate && gate.status === "pending" && gate.executionReleased && !expired(gate) && globalAiEnabled && gate.consumedCalls === 0);
 
@@ -98,6 +118,7 @@ export default function ExecutarMultiagentePage() {
         ? "O gate expirou antes do disparo. Nenhuma nova tentativa foi feita; prepare e libere um novo gate na tela principal."
         : code === "workflow_gate_not_released" ? "O gate não está liberado para execução. Nenhuma chamada foi iniciada."
         : code === "ai_disabled" ? "O kill switch está fechado. Nenhuma chamada foi iniciada."
+        : code === "login_required" || code === "refresh_failed" || code === "invalid_session" ? "A sessão HML expirou antes do disparo. Entre novamente nesta tela; nenhuma IA foi executada."
         : "O estado da execução não foi confirmado. NÃO repita o comando. Confira auditoria e consumo antes de qualquer nova ação.");
     } finally {
       setBusy(false);
@@ -111,7 +132,14 @@ export default function ExecutarMultiagentePage() {
       <h1 className="text-2xl font-bold">Veence · Execução multiagente REAL · HML</h1>
       <p className="text-sm text-slate-300">Esta tela apenas dispara um gate já preparado e liberado por humano. Não cria autorização, não abre o kill switch e não executa retry.</p>
       <a className="text-sm underline" href="/hml/veence">Voltar ao painel HML</a>
-      {!ready ? <p>Verificando sessão…</p> : !authenticated ? <p>Você precisa entrar primeiro em <a className="underline" href="/hml/veence">/hml/veence</a>.</p> : <>
+      {!ready ? <p>Verificando sessão…</p> : !authenticated ? <>
+        <p className="text-sm text-amber-200">A sessão desta tela não foi encontrada. Entre novamente abaixo. O login não prepara gate e não executa IA.</p>
+        <form onSubmit={signIn} className="grid gap-3 rounded border border-slate-700 p-4">
+          <label>E-mail do usuário HML<input className="mt-1 block w-full rounded p-2 text-slate-900" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <label>Senha<input className="mt-1 block w-full rounded p-2 text-slate-900" type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} /></label>
+          <button className="rounded bg-blue-600 p-2 font-semibold disabled:opacity-50" disabled={busy}>{busy ? "Entrando…" : "Entrar no HML"}</button>
+        </form>
+      </> : <>
         <div className="rounded border border-cyan-700 p-4 text-sm">
           <h2 className="font-bold">Gate atual</h2>
           {!gate ? <p>Nenhum gate multiagente encontrado.</p> : <div className="mt-2 space-y-1">
