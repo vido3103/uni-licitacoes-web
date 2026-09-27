@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const packageSql = readFileSync(new URL('../supabase/hml/011_agent_package_v1.sql', import.meta.url), 'utf8');
 const gateSql = readFileSync(new URL('../supabase/hml/012_agent_workflow_gate.sql', import.meta.url), 'utf8');
+const workflowIdentitySql = readFileSync(new URL('../supabase/hml/015_agent_workflow_identity.sql', import.meta.url), 'utf8');
+const controlFunction = readFileSync(new URL('../supabase/functions/veence-hml-agent-control/index.ts', import.meta.url), 'utf8');
 
 test('agent package is configured but remains fail-closed', () => {
   assert.match(packageSql, /enabled\s*=\s*false/i);
@@ -26,4 +28,13 @@ test('invocation idempotency is durable before any future provider call', () => 
   assert.match(gateSql, /invocation_key=p_invocation_key/i);
   assert.match(gateSql, /'replayed',true/i);
   assert.match(gateSql, /authorization_id uuid references hml\.agent_workflow_authorizations/i);
+});
+
+test('human authorization is bound to the exact selected workflow', () => {
+  assert.match(workflowIdentitySql, /add column if not exists workflow text/i);
+  assert.match(workflowIdentitySql, /p_workflow text/i);
+  assert.match(workflowIdentitySql, /a\.workflow is distinct from p_workflow/i);
+  assert.match(workflowIdentitySql, /hml_issue_agent_workflow_authorization_v2_service/i);
+  assert.match(controlFunction, /p_workflow:workflow/i);
+  assert.match(controlFunction, /if\(!globalAiEnabled\)return json\(\{error:"ai_disabled"\}/i);
 });
