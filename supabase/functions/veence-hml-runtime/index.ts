@@ -3,9 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { dispatchMock } from "./mock-dispatcher.ts";
 import { mockGateDecision, mockQueueReady } from "./gate-policy.ts";
 
-const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const headers = { "content-type": "application/json", "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info" };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers });
@@ -29,16 +29,23 @@ Deno.serve(async (request) => {
   if (snapshotError) return json({ error: "runtime_unavailable" }, 503);
   if (!snapshot) return json({ error: "forbidden" }, 403);
   const globalAiEnabled = (Deno.env.get("VEENCE_AI_ENABLED") ?? "false").toLowerCase() === "true";
+
   if (action === "status") {
-    const { data: queue } = await db.from("opportunity_ai_analysis_queue")
-      .select("opportunity_id").eq("id", queueId).maybeSingle();
+    const [{ data: queue }, { data: gatewayAuthorization }] = await Promise.all([
+      db.from("opportunity_ai_analysis_queue").select("opportunity_id").eq("id", queueId).maybeSingle(),
+      db.rpc("hml_gateway_authorization_snapshot_service", { p_user: auth.user.id, p_queue: queueId }),
+    ]);
     const { data: opportunity } = queue?.opportunity_id
       ? await db.from("public_opportunities").select("id,title,buyer_name,process_number")
         .eq("id", queue.opportunity_id).maybeSingle()
       : { data: null };
-    return json({ ...snapshot, opportunity, globalAiEnabled,
+    return json({ ...snapshot, mockAuthorization: snapshot.authorization ?? null, gatewayAuthorization,
+      opportunity, globalAiEnabled,
       mockAvailable: mockQueueReady({ userId: auth.user.id, clientId: snapshot.clientId,
-        queueId, queue: snapshot.queue }) });
+        queueId, queue: snapshot.queue }),
+      realAvailable: globalAiEnabled && mockQueueReady({ userId: auth.user.id, clientId: snapshot.clientId,
+        queueId, queue: snapshot.queue }),
+    });
   }
 
   if (action === "authorize_mock") {
@@ -64,8 +71,9 @@ Deno.serve(async (request) => {
 
   if (action === "run_mock") {
     if (!uuid(input.authorization_id)) return json({ error: "authorization_id_required" }, 400);
-    if (snapshot.authorization?.id !== input.authorization_id ||
-        mockGateDecision(snapshot.authorization, { userId: auth.user.id,
+    const mockAuthorization = snapshot.authorization;
+    if (mockAuthorization?.id !== input.authorization_id ||
+        mockGateDecision(mockAuthorization, { userId: auth.user.id,
           clientId: snapshot.clientId, queueId, queue: snapshot.queue }, Date.now()) === "deny") {
       return json({ error: "gate_denied" }, 409);
     }
@@ -88,10 +96,57 @@ Deno.serve(async (request) => {
         executionId: reservation.executionId, retryAllowed: false }, 500);
       return json({ executionId: reservation.executionId, status: "completed", result });
     } catch {
-      // The gate remains consumed on any failure. Never dispatch a second time.
       return json({ error: "mock_dispatch_failed", executionId: reservation.executionId,
         retryAllowed: false }, 500);
     }
   }
+
+  if (action === "authorize_real") {
+    if (!globalAiEnabled) return json({ error: "ai_disabled" }, 503);
+    if (!uuid(input.request_key)) return json({ error: "request_key_required" }, 400);
+    if (!mockQueueReady({ userId: auth.user.id, clientId: snapshot.clientId, queueId,
+      queue: snapshot.queue })) return json({ error: "gate_denied" }, 409);
+    const { data, error } = await db.rpc("hml_issue_gateway_authorization_service", {
+      p_user: auth.user.id, p_queue: queueId, p_request_key: input.request_key,
+      p_max_cost: 0.10, p_ttl_minutes: 10,
+    });
+    if (error) return json({ error: "authorization_failed" }, 500);
+    return data ? json({ authorization: data }) : json({ error: "gate_denied" }, 409);
+  }
+
+  if (action === "revoke_real") {
+    if (!uuid(input.authorization_id)) return json({ error: "authorization_id_required" }, 400);
+    const { data, error } = await db.rpc("hml_revoke_gateway_authorization_service", {
+      p_user: auth.user.id, p_authorization: input.authorization_id,
+    });
+    if (error) return json({ error: "revoke_failed" }, 500);
+    return data === true ? json({ revoked: true }) : json({ error: "revoke_denied" }, 409);
+  }
+
+  if (action === "run_real") {
+    if (!globalAiEnabled) return json({ error: "ai_disabled" }, 503);
+    if (!uuid(input.authorization_id)) return json({ error: "authorization_id_required" }, 400);
+    const { data: gate } = await db.rpc("hml_gateway_authorization_snapshot_service", {
+      p_user: auth.user.id, p_queue: queueId,
+    });
+    if (!gate || gate.id !== input.authorization_id || gate.status !== "pending" || gate.consumed_calls !== 0 ||
+        gate.max_calls !== 1 || Number(gate.max_cost_usd) <= 0 || Number(gate.max_cost_usd) > 0.10 ||
+        !Number.isFinite(Date.parse(gate.expires_at)) || Date.parse(gate.expires_at) <= Date.now()) {
+      return json({ error: "gate_denied" }, 409);
+    }
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/veence-hml-single-shot`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_ROLE_KEY, "content-type": "application/json" },
+        body: JSON.stringify({ queue_id: queueId }),
+      });
+      const body = await response.json().catch(() => ({ error: "invalid_worker_response" }));
+      return json({ ...body, retryAllowed: false }, response.status);
+    } catch {
+      return json({ error: "single_shot_transport_unknown", retryAllowed: false,
+        message: "Estado ambíguo: consulte status e auditoria; não repita automaticamente." }, 502);
+    }
+  }
+
   return json({ error: "unknown_action" }, 400);
 });
