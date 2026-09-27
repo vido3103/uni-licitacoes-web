@@ -32,7 +32,9 @@ export type GatewayResult = {
   providerMetadata: unknown;
 };
 
-const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
+const MIN_TIMEOUT_MS = 120_000;
+const MAX_TIMEOUT_MS = 125_000;
 const MIN_OUTPUT_TOKENS = 4_096;
 const GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 const REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
@@ -81,7 +83,13 @@ export async function callAiGateway(messages: unknown[]): Promise<GatewayResult>
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-  const timeoutMs = envInt("VEENCE_AI_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
+  // HML has a 150 s platform wall-clock/idle ceiling. Keep the gateway window
+  // long enough for reasoning models while preserving margin for persistence
+  // and the final HTTP response. A stale 45 s secret can no longer shorten it.
+  const timeoutMs = Math.min(
+    Math.max(envInt("VEENCE_AI_TIMEOUT_MS", DEFAULT_TIMEOUT_MS), MIN_TIMEOUT_MS),
+    MAX_TIMEOUT_MS,
+  );
   // GPT-5-family reasoning tokens count against the output-token budget. The old
   // 900-token cap could be exhausted by reasoning alone and yield HTTP 200 with
   // empty assistant content. Keep HML above a safe floor while the operational

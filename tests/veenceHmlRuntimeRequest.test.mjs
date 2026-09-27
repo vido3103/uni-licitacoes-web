@@ -28,3 +28,20 @@ test('invalid user and HTTP 401 cannot consume authorization or retry', async ()
   await assert.rejects(hmlRuntimeRequest(auth(true), transport, 'run_mock', { authorization_id: 'gate' }), /session_expired/);
   assert.equal(calls, 1);
 });
+
+test('runtime preserves structured worker errors so the UI can distinguish timeout from generic failure', async () => {
+  let reads = 0;
+  const context = {
+    status: 500,
+    clone() { return this; },
+    async json() { reads++; return { error: 'ai_gateway_timeout', retryAllowed: false }; },
+  };
+  const transport = { async invoke() {
+    return { data: null, error: { message: 'Edge Function returned a non-2xx status code', context } };
+  } };
+  await assert.rejects(
+    hmlRuntimeRequest(auth(true), transport, 'run_real', { authorization_id: 'gate' }),
+    /ai_gateway_timeout/,
+  );
+  assert.equal(reads, 1);
+});

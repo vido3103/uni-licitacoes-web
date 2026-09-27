@@ -86,9 +86,11 @@ export default function VeenceHmlPage() {
       const text = error instanceof Error ? error.message : "";
       setMessage(/session|login|refresh/.test(text)
         ? "A sessão expirou antes do envio. Entre novamente; nenhuma repetição automática foi feita."
-        : text === "runtime_disabled" ? "IA global está bloqueada pelo kill switch. Nenhuma inferência foi feita."
+        : text === "ai_disabled" || text === "runtime_disabled" ? "IA global está bloqueada pelo kill switch. Nenhuma inferência foi feita."
+        : text.startsWith("ai_gateway_timeout") ? "TIMEOUT DA IA: a chamada real excedeu a janela de processamento. O estado é FAILED/AMBÍGUO e o gate foi consumido. Não repita a inferência; confira status e auditoria."
+        : text === "single_shot_transport_unknown" ? "ESTADO AMBÍGUO: a resposta do worker não foi confirmada. Não repita a inferência; confira status e auditoria."
         : text === "authorization_not_pending" ? "A autorização não ficou pendente. Nenhuma inferência foi feita; atualize o status antes de continuar."
-        : "A operação não foi confirmada. Verifique status e auditoria antes de qualquer nova ação; não repita automaticamente.");
+        : "A operação falhou ou não foi confirmada. Verifique status e auditoria antes de qualquer nova ação; não repita automaticamente.");
     } finally {
       setBusy(false); inFlight.current = false;
       void loadStatus().catch(() => setStatus(null));
