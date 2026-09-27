@@ -16,7 +16,12 @@ export async function callAgentGateway({ model, instructions, content, maxOutput
   if (!key) throw new AgentGatewayError('ai_gateway_auth_missing');
   const controller = new AbortController();
   const timeout = Math.max(1000, Math.min(Number(timeoutMs) || 120000, 120000));
-  const maxTokens = Math.max(1, Math.min(Number(maxOutputTokens) || 1024, 4096));
+  // GPT-5-family reasoning tokens share the completion budget. HML previously
+  // allowed registry values below 4096, which can truncate an otherwise valid
+  // JSON response after the provider has already processed the paid request.
+  // Keep one deterministic 4096-token ceiling/floor; the operational gate and
+  // per-agent max_cost_usd remain the authoritative call/cost controls.
+  const maxTokens = Math.max(4096, Math.min(Number(maxOutputTokens) || 4096, 4096));
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
@@ -38,14 +43,25 @@ export async function callAgentGateway({ model, instructions, content, maxOutput
     if (!response.ok) throw new AgentGatewayError(`ai_gateway_http_${response.status}`, { status: response.status });
     const body = await response.json().catch(() => null);
     const text = body?.choices?.[0]?.message?.content;
+    const diagnostic = {
+      requestId: response.headers.get('x-request-id') || body?.id || null,
+      modelActual: typeof body?.model === 'string' ? body.model : null,
+      finishReason: body?.choices?.[0]?.finish_reason ?? null,
+      promptTokens: Number.isFinite(body?.usage?.prompt_tokens) ? body.usage.prompt_tokens : null,
+      completionTokens: Number.isFinite(body?.usage?.completion_tokens) ? body.usage.completion_tokens : null,
+      reasoningTokens: Number.isFinite(body?.usage?.completion_tokens_details?.reasoning_tokens)
+        ? body.usage.completion_tokens_details.reasoning_tokens
+        : null,
+      maxOutputTokens: maxTokens,
+    };
     if (typeof text !== 'string' || !text.trim()) {
-      throw new AgentGatewayError('ai_gateway_empty_response', { diagnostic: { requestId: response.headers.get('x-request-id') || body?.id || null } });
+      throw new AgentGatewayError('ai_gateway_empty_response', { diagnostic });
     }
     let parsed;
     try {
       parsed = normalizeGatewayPayload(JSON.parse(text.replace(/^```json\s*/i, '').replace(/```$/i, '').trim()));
     } catch {
-      throw new AgentGatewayError('ai_gateway_invalid_response', { diagnostic: { requestId: response.headers.get('x-request-id') || body?.id || null } });
+      throw new AgentGatewayError('ai_gateway_invalid_response', { diagnostic });
     }
     const metadata = body?.choices?.[0]?.message?.provider_metadata?.gateway ?? null;
     const reportedCost = Number(metadata?.cost ?? metadata?.gatewayCost ?? metadata?.inferenceCost);
