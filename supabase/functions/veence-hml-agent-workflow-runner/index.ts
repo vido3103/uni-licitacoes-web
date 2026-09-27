@@ -8,6 +8,17 @@ const headers = { "content-type": "application/json", "Access-Control-Allow-Orig
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers });
 const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
+const dependencies: Record<string, string[]> = {
+  orchestracao_veence: [],
+  triagem: ["orchestracao_veence"],
+  habilitacao: ["triagem"],
+  produtos: ["triagem"],
+  suprimentos: ["produtos"],
+  logistica: ["produtos", "suprimentos"],
+  economico: ["produtos", "suprimentos", "logistica"],
+  auditoria: ["orchestracao_veence", "triagem", "habilitacao", "produtos", "suprimentos", "logistica", "economico"],
+};
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -36,13 +47,48 @@ Deno.serve(async (request) => {
   if (!agents.length || agents.length !== Number(gate.max_calls) || agents.length > 10) return json({ error: "workflow_gate_invalid" }, 409);
   if (Number(gate.max_cost_usd) <= 0 || Number(gate.max_cost_usd) > 0.50) return json({ error: "workflow_budget_invalid" }, 409);
   const context = queue.context_snapshot && typeof queue.context_snapshot === "object" ? queue.context_snapshot as Record<string, unknown> : {};
-  const baseContext = { homologation: true, advisoryOnly: true, externalWritesAllowed: false, humanFinalDecision: true, workflow: gate.workflow, queueId, clientId: queue.client_id, queueStatus: queue.status, method: context.method ?? null, profile: context.profile ?? null, playbook: context.playbook ?? null, opportunity: context.opportunity ?? null, selectedItems: context.selectedItems ?? null, selection: context.selection ?? null, documents: context.documents ?? null, deterministicContext: context.deterministicContext ?? null };
+  const baseContext = {
+    homologation: true,
+    advisoryOnly: true,
+    externalWritesAllowed: false,
+    humanFinalDecision: true,
+    workflow: gate.workflow,
+    queueId,
+    clientId: queue.client_id,
+    queueStatus: queue.status,
+    method: context.method ?? null,
+    profile: context.profile ?? null,
+    playbook: context.playbook ?? null,
+    versions: context.versions ?? null,
+    opportunity: context.opportunity ?? null,
+    selectedItems: context.selectedItems ?? null,
+    selection: context.selection ?? null,
+    documents: context.documents ?? null,
+    documentAccess: {
+      mode: "metadata_only",
+      contentRead: false,
+      note: "Os PDFs existem no Storage HML, mas este runner ainda não anexou o conteúdo binário à chamada. Metadados não autorizam afirmar leitura do documento.",
+    },
+    deterministicContext: context.deterministicContext ?? null,
+  };
   if (JSON.stringify(baseContext).length > 150_000) return json({ error: "workflow_context_too_large" }, 413);
   const outputs: Array<Record<string, unknown>> = [];
+  const resultByAgent: Record<string, unknown> = {};
   let previousResult: unknown = null;
   for (let index = 0; index < agents.length; index += 1) {
     const agentCode = agents[index];
-    const content = { ...baseContext, step: index + 1, totalSteps: agents.length, agentCode, previousAgentResult: previousResult };
+    const upstreamAgentResults = Object.fromEntries(
+      (dependencies[agentCode] ?? []).filter((code) => Object.prototype.hasOwnProperty.call(resultByAgent, code)).map((code) => [code, resultByAgent[code]]),
+    );
+    const content = {
+      ...baseContext,
+      step: index + 1,
+      totalSteps: agents.length,
+      agentCode,
+      previousAgentResult: previousResult,
+      upstreamAgentResults,
+    };
+    if (JSON.stringify(content).length > 200_000) return json({ error: "workflow_step_context_too_large", failedAgent: agentCode, completedAgents: outputs, retryAllowed: false }, 413);
     const invocationKey = crypto.randomUUID();
     let response: Response;
     try {
@@ -54,6 +100,7 @@ Deno.serve(async (request) => {
     if (!response.ok || body?.ok !== true) return json({ error: body?.error ?? "agent_execution_failed", failedAgent: agentCode, failedStatus: response.status, completedAgents: outputs, invocation: body, retryAllowed: false }, 500);
     const item = { agentCode, invocationId: body.invocationId, model: body.model, costUsd: body.costUsd, inputTokens: body.inputTokens, outputTokens: body.outputTokens, result: body.result };
     outputs.push(item);
+    resultByAgent[agentCode] = body.result;
     previousResult = body.result;
   }
   const totalCostUsd = outputs.reduce((sum, item) => sum + (Number(item.costUsd) || 0), 0);
