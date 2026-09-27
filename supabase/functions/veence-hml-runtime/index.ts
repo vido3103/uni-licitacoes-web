@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { dispatchMock } from "./mock-dispatcher.ts";
+import { mockGateDecision, mockQueueReady } from "./gate-policy.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -36,11 +37,14 @@ Deno.serve(async (request) => {
         .eq("id", queue.opportunity_id).maybeSingle()
       : { data: null };
     return json({ ...snapshot, opportunity, globalAiEnabled,
-      mockAvailable: snapshot.queue?.status === "pending" && snapshot.queue?.attempts === 0 && snapshot.queue?.maxAttempts === 1 });
+      mockAvailable: mockQueueReady({ userId: auth.user.id, clientId: snapshot.clientId,
+        queueId, queue: snapshot.queue }) });
   }
 
   if (action === "authorize_mock") {
     if (!uuid(input.request_key)) return json({ error: "request_key_required" }, 400);
+    if (!mockQueueReady({ userId: auth.user.id, clientId: snapshot.clientId, queueId,
+      queue: snapshot.queue })) return json({ error: "gate_denied" }, 409);
     const { data, error } = await db.rpc("hml_issue_mock_authorization_service", {
       p_user: auth.user.id, p_queue: queueId, p_request_key: input.request_key,
       p_agent: "orchestracao_veence", p_max_cost: 0, p_ttl_minutes: 30,
@@ -60,6 +64,11 @@ Deno.serve(async (request) => {
 
   if (action === "run_mock") {
     if (!uuid(input.authorization_id)) return json({ error: "authorization_id_required" }, 400);
+    if (snapshot.authorization?.id !== input.authorization_id ||
+        mockGateDecision(snapshot.authorization, { userId: auth.user.id,
+          clientId: snapshot.clientId, queueId, queue: snapshot.queue }, Date.now()) === "deny") {
+      return json({ error: "gate_denied" }, 409);
+    }
     const { data: reservation, error: reserveError } = await db.rpc("hml_consume_mock_authorization_service", {
       p_user: auth.user.id, p_queue: queueId, p_authorization: input.authorization_id,
     });
