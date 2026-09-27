@@ -49,6 +49,47 @@ function reasoningEffort() {
   return REASONING_EFFORTS.has(configured) ? configured : "low";
 }
 
+function losslessText(value: unknown, fallback = ""): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized === undefined ? fallback : serialized;
+  } catch {
+    return fallback;
+  }
+}
+
+export function normalizeGatewayPayload(input: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { ...input };
+
+  for (const key of ["blockers", "warnings"] as const) {
+    const value = input[key];
+    normalized[key] = Array.isArray(value)
+      ? value.slice(0, 100).map((item) => losslessText(item)).filter((item) => item.length > 0)
+      : [];
+  }
+
+  const evidence = input.evidence;
+  normalized.evidence = Array.isArray(evidence)
+    ? evidence.slice(0, 50).map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return { source: "AI", locator: null, finding: losslessText(item) };
+        }
+        const record = item as Record<string, unknown>;
+        return {
+          ...record,
+          source: losslessText(record.source, "AI") || "AI",
+          locator: record.locator === null || record.locator === undefined ? null : losslessText(record.locator),
+          finding: losslessText(record.finding ?? record.description ?? record.message ?? record.text ?? record),
+        };
+      })
+    : [];
+
+  return normalized;
+}
+
 export function classifyGatewayStatus(status: number): GatewayError {
   if (status === 401 || status === 403) {
     return new GatewayError(`ai_gateway_http_${status}`, false, false, status);
@@ -140,7 +181,9 @@ export async function callAiGateway(messages: unknown[]): Promise<GatewayResult>
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
+      parsed = normalizeGatewayPayload(
+        JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim()),
+      );
     } catch {
       throw new GatewayError("ai_gateway_invalid_response", false, false, undefined, {
         request_id: response.headers.get("x-request-id") || body?.id || null,
