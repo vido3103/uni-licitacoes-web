@@ -6,13 +6,13 @@ const S = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(U, S, { auth: { persistSession: false, autoRefreshToken: false } });
 const headers = { "content-type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info" };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers });
-const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const dependencies: Record<string, string[]> = {
   orchestracao_veence: [],
   triagem: ["orchestracao_veence"],
-  habilitacao: ["triagem"],
-  produtos: ["triagem"],
+  habilitacao: ["orchestracao_veence", "triagem"],
+  produtos: ["orchestracao_veence", "triagem"],
   suprimentos: ["produtos"],
   logistica: ["produtos", "suprimentos"],
   economico: ["produtos", "suprimentos", "logistica"],
@@ -67,7 +67,7 @@ Deno.serve(async (request) => {
     documentAccess: {
       mode: "metadata_only",
       contentRead: false,
-      note: "Os PDFs existem no Storage HML, mas este runner ainda não anexou o conteúdo binário à chamada. Metadados não autorizam afirmar leitura do documento.",
+      note: "O workflow carrega apenas metadados. O agent-runner anexa os PDFs oficiais diretamente e somente à orquestração; os agentes seguintes reutilizam o dossiê de evidências produzido nessa primeira etapa.",
     },
     deterministicContext: context.deterministicContext ?? null,
   };
@@ -98,7 +98,7 @@ Deno.serve(async (request) => {
     }
     const body = await response.json().catch(() => ({ error: "invalid_agent_response" }));
     if (!response.ok || body?.ok !== true) return json({ error: body?.error ?? "agent_execution_failed", failedAgent: agentCode, failedStatus: response.status, completedAgents: outputs, invocation: body, retryAllowed: false }, 500);
-    const item = { agentCode, invocationId: body.invocationId, model: body.model, costUsd: body.costUsd, inputTokens: body.inputTokens, outputTokens: body.outputTokens, result: body.result };
+    const item = { agentCode, invocationId: body.invocationId, model: body.model, costUsd: body.costUsd, inputTokens: body.inputTokens, outputTokens: body.outputTokens, transport: body.transport, attachedPdfCount: body.attachedPdfCount, result: body.result };
     outputs.push(item);
     resultByAgent[agentCode] = body.result;
     previousResult = body.result;
