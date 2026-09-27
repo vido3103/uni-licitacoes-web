@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeGatewayPayload } from '../supabase/functions/veence-hml-single-shot/ai-gateway.ts';
+import { normalizeGatewayPayload } from '../supabase/functions/veence-hml-single-shot/normalize.mjs';
 
 test('structured blockers and warnings never collapse to [object Object]', () => {
   const normalized = normalizeGatewayPayload({
