@@ -27,6 +27,8 @@ Deno.serve(async(req)=>{
  if(!approvedQueue||!testId||queueId!==approvedQueue)return json({error:"hml_test_not_configured"},503);
  const{data:queue,error:queueError}=await db.from("opportunity_ai_analysis_queue").select("id,client_id,status,context_snapshot").eq("id",queueId).maybeSingle();if(queueError||!queue)return json({error:"queue_not_found"},404);
  const[{data:membership},{data:owner}]=await Promise.all([db.from("client_members").select("client_id").eq("client_id",queue.client_id).eq("user_id",userData.user.id).maybeSingle(),db.from("platform_user_roles").select("user_id").eq("user_id",userData.user.id).eq("role","platform_owner").eq("active",true).maybeSingle()]);if(!membership&&!owner)return json({error:"forbidden"},403);
+ const{data:operationalGate,error:gateError}=await db.rpc("hml_consume_gateway_authorization_service",{p_user:userData.user.id,p_queue:queueId});
+ if(gateError||!operationalGate)return json({error:"operational_gate_required"},403);
  const{data:claimed,error:claimError}=await db.rpc("claim_opportunity_ai_analysis_job_service",{p_queue_id:queueId,p_client_id:queue.client_id,p_worker_id:WORKER_ID});if(claimError)return json({error:"queue_claim_failed",detail:claimError.message},409);const job=Array.isArray(claimed)?claimed[0]:null;if(!job){if(queue.status==="completed")return json({ok:true,status:"completed",queue_id:queueId,already_completed:true});return json({error:"queue_not_runnable",status:queue.status},409)}
  let aiExecutionId:string|null=null;let activeProvider=cfg.provider;let activeModel=Deno.env.get("VEENCE_AI_MODEL")||"unconfigured";
  try{
