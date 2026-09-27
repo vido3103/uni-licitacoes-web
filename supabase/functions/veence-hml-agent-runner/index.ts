@@ -5,8 +5,7 @@ import { AgentGatewayError, callAgentGateway } from "./gateway.mjs";
 const U = Deno.env.get("SUPABASE_URL")!;
 const S = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(U, S, { auth: { persistSession: false, autoRefreshToken: false } });
-const headers = { "content-type": "application/json", "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info" };
+const headers = { "content-type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info" };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers });
 const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error ?? "unknown_error");
@@ -21,149 +20,45 @@ const HML_EVIDENCE_RULES = `Regras obrigatórias de evidência no HML:
 - O agente econômico só pode calcular preço/custo quando houver custo de aquisição/cotação de fornecedor explicitamente verificado. Na ausência, informe os parâmetros/fórmulas aplicáveis e bloqueie o cálculo numérico, sem inventar custo.
 - humanFinalDecision=true significa que a decisão final permanece humana; não é, por si só, prova de autorização específica para contato externo. externalWritesAllowed=false proíbe executar ações externas neste fluxo, mas não impede análise consultiva nem a indicação de próximos passos.
 - Preserve a distinção entre evidência fornecida, resultado de agente anterior e inferência. Não promova hipótese ou saída anterior a fato documental.`;
-
-const ORCHESTRATOR_DOCUMENT_RULES = `Como primeiro agente do fluxo, quando houver PDFs anexados, produza também um dossiê documental estruturado e reutilizável pelos agentes seguintes. Cubra somente o escopo selecionado e extraia, quando existirem: especificações técnicas e quantidades; marca/modelo/referência/equivalência; garantia; habilitação e qualificação; condições comerciais; locais, prazos e condições de entrega/recebimento; embalagem/transporte; datas e prazos do certame; divergências entre Edital/TR/ETP. Para cada evidência, informe arquivo e página/seção quando identificável. Não invente requisito ausente e não use valor estimado do órgão como custo da Luvi.`;
-
+const ORCHESTRATOR_DOCUMENT_RULES = `Como primeiro agente do fluxo, quando houver PDFs anexados, produza também um dossiê documental estruturado e reutilizável pelos agentes seguintes. Cubra somente o escopo selecionado e extraia, quando existirem: especificações técnicas e quantidades; marca/modelo/referência/equivalência; garantia; habilitação e qualificação; condições comerciais; locais, prazos e condições de entrega/recebimento; embalagem/transporte; datas e prazos do certame; divergências entre Edital/TR/ETP. Para cada evidência, informe arquivo e página/seção quando identificável. Se qualquer arquivo não puder ser lido integralmente, registre document_read_incomplete com o nome do arquivo e não declare leitura documental integral. Não invente requisito ausente e não use valor estimado do órgão como custo da Luvi.`;
 type GatewayFile = { url: string; filename: string; mimeType: "application/pdf" };
-
 async function trustedPdfInputs(queue: { client_id: string; opportunity_id: string }, agentCode: string): Promise<GatewayFile[]> {
   if (agentCode !== "orchestracao_veence") return [];
-  const { data: rows, error } = await db.from("opportunity_documents")
-    .select("storage_bucket,storage_path,original_filename,mime_type,file_size_bytes,validation_status")
-    .eq("client_id", queue.client_id)
-    .eq("opportunity_id", queue.opportunity_id)
-    .eq("validation_status", "available")
-    .order("uploaded_at");
+  const { data: rows, error } = await db.from("opportunity_documents").select("storage_bucket,storage_path,original_filename,mime_type,file_size_bytes,validation_status").eq("client_id", queue.client_id).eq("opportunity_id", queue.opportunity_id).eq("validation_status", "available").order("uploaded_at");
   if (error) throw new Error("document_catalog_unavailable");
   const eligible: Array<{ storage_bucket: string; storage_path: string; original_filename: string; file_size_bytes: number }> = [];
   let total = 0;
-  for (const row of rows ?? []) {
-    const size = Number(row.file_size_bytes ?? 0);
-    if (String(row.mime_type ?? "").toLowerCase() !== "application/pdf" || size <= 0 || size > MAX_PDF_BYTES) continue;
-    if (total + size > MAX_PDF_TOTAL_BYTES || eligible.length >= 5) break;
-    if (!row.storage_bucket || !row.storage_path) continue;
-    total += size;
-    eligible.push({
-      storage_bucket: String(row.storage_bucket),
-      storage_path: String(row.storage_path),
-      original_filename: String(row.original_filename || "documento.pdf"),
-      file_size_bytes: size,
-    });
-  }
+  for (const row of rows ?? []) { const size = Number(row.file_size_bytes ?? 0); if (String(row.mime_type ?? "").toLowerCase() !== "application/pdf" || size <= 0 || size > MAX_PDF_BYTES) continue; if (total + size > MAX_PDF_TOTAL_BYTES || eligible.length >= 5) break; if (!row.storage_bucket || !row.storage_path) continue; total += size; eligible.push({ storage_bucket: String(row.storage_bucket), storage_path: String(row.storage_path), original_filename: String(row.original_filename || "documento.pdf"), file_size_bytes: size }); }
   const files: GatewayFile[] = [];
-  for (const row of eligible) {
-    const { data, error: signError } = await db.storage.from(row.storage_bucket).createSignedUrl(row.storage_path, PDF_URL_TTL_SECONDS);
-    if (signError || !data?.signedUrl) throw new Error("document_signing_failed");
-    files.push({ url: data.signedUrl, filename: row.original_filename, mimeType: "application/pdf" });
-  }
+  for (const row of eligible) { const { data, error: signError } = await db.storage.from(row.storage_bucket).createSignedUrl(row.storage_path, PDF_URL_TTL_SECONDS); if (signError || !data?.signedUrl) throw new Error("document_signing_failed"); files.push({ url: data.signedUrl, filename: row.original_filename, mimeType: "application/pdf" }); }
   return files;
 }
-
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if ((Deno.env.get("VEENCE_AI_ENABLED") ?? "false").toLowerCase() !== "true") return json({ error: "ai_disabled" }, 503);
-
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const { data: auth, error: authError } = await db.auth.getUser(token);
-  if (authError || !auth.user) return json({ error: "unauthorized" }, 401);
-
-  const input = await request.json().catch(() => ({}));
-  const authorizationId = input.authorization_id;
-  const invocationKey = input.invocation_key;
-  const agentCode = typeof input.agent_code === "string" ? input.agent_code : "";
-  const queueId = typeof input.queue_id === "string" ? input.queue_id : "";
-  if (!isUuid(authorizationId) || !isUuid(invocationKey) || !isUuid(queueId) || !/^[a-z_]+$/.test(agentCode)) {
-    return json({ error: "invalid_request" }, 400);
-  }
-  const approvedQueue = Deno.env.get("VEENCE_HML_QUEUE_ID") ?? "";
-  if (!approvedQueue || queueId !== approvedQueue) return json({ error: "hml_queue_not_configured" }, 503);
-
-  const serializedContent = JSON.stringify(input.content ?? {});
-  if (serializedContent.length > 200_000) return json({ error: "content_too_large" }, 413);
-
-  const [{ data: queue, error: queueError }, { data: config, error: configError }] = await Promise.all([
-    db.from("opportunity_ai_analysis_queue").select("id,client_id,opportunity_id,status").eq("id", queueId).maybeSingle(),
-    db.rpc("hml_agent_config_service", { p_agent_code: agentCode }),
-  ]);
-  if (queueError || !queue) return json({ error: "queue_not_found" }, 404);
-  if (configError || !config) return json({ error: "agent_not_found" }, 404);
-  const [{ data: membership }, { data: owner }] = await Promise.all([
-    db.from("client_members").select("client_id").eq("client_id", queue.client_id).eq("user_id", auth.user.id).maybeSingle(),
-    db.from("platform_user_roles").select("user_id").eq("user_id", auth.user.id).eq("role", "platform_owner").eq("active", true).maybeSingle(),
-  ]);
-  if (!membership && !owner) return json({ error: "forbidden" }, 403);
-  if (config.enabled !== true) return json({ error: "agent_disabled" }, 409);
-  if (config.provider !== "gateway" || !config.model || !String(config.instructions ?? "").trim()) return json({ error: "agent_not_configured" }, 409);
-
-  const estimatedCost = Number(config.max_cost_usd);
-  if (!Number.isFinite(estimatedCost) || estimatedCost <= 0) return json({ error: "agent_budget_invalid" }, 409);
-  const { data: reservation, error: reservationError } = await db.rpc("hml_reserve_authorized_agent_invocation_service", {
-    p_authorization: authorizationId,
-    p_user: auth.user.id,
-    p_invocation_key: invocationKey,
-    p_agent_code: agentCode,
-    p_client_id: queue.client_id,
-    p_queue_id: queueId,
-    p_estimated_cost: estimatedCost,
-  });
+  const { data: auth, error: authError } = await db.auth.getUser(token); if (authError || !auth.user) return json({ error: "unauthorized" }, 401);
+  const input = await request.json().catch(() => ({})); const authorizationId = input.authorization_id; const invocationKey = input.invocation_key; const agentCode = typeof input.agent_code === "string" ? input.agent_code : ""; const queueId = typeof input.queue_id === "string" ? input.queue_id : "";
+  if (!isUuid(authorizationId) || !isUuid(invocationKey) || !isUuid(queueId) || !/^[a-z_]+$/.test(agentCode)) return json({ error: "invalid_request" }, 400);
+  const approvedQueue = Deno.env.get("VEENCE_HML_QUEUE_ID") ?? ""; if (!approvedQueue || queueId !== approvedQueue) return json({ error: "hml_queue_not_configured" }, 503);
+  const serializedContent = JSON.stringify(input.content ?? {}); if (serializedContent.length > 200_000) return json({ error: "content_too_large" }, 413);
+  const [{ data: queue, error: queueError }, { data: config, error: configError }] = await Promise.all([db.from("opportunity_ai_analysis_queue").select("id,client_id,opportunity_id,status").eq("id", queueId).maybeSingle(), db.rpc("hml_agent_config_service", { p_agent_code: agentCode })]);
+  if (queueError || !queue) return json({ error: "queue_not_found" }, 404); if (configError || !config) return json({ error: "agent_not_found" }, 404);
+  const [{ data: membership }, { data: owner }] = await Promise.all([db.from("client_members").select("client_id").eq("client_id", queue.client_id).eq("user_id", auth.user.id).maybeSingle(), db.from("platform_user_roles").select("user_id").eq("user_id", auth.user.id).eq("role", "platform_owner").eq("active", true).maybeSingle()]);
+  if (!membership && !owner) return json({ error: "forbidden" }, 403); if (config.enabled !== true) return json({ error: "agent_disabled" }, 409); if (config.provider !== "gateway" || !config.model || !String(config.instructions ?? "").trim()) return json({ error: "agent_not_configured" }, 409);
+  const estimatedCost = Number(config.max_cost_usd); if (!Number.isFinite(estimatedCost) || estimatedCost <= 0) return json({ error: "agent_budget_invalid" }, 409);
+  const { data: reservation, error: reservationError } = await db.rpc("hml_reserve_authorized_agent_invocation_service", { p_authorization: authorizationId, p_user: auth.user.id, p_invocation_key: invocationKey, p_agent_code: agentCode, p_client_id: queue.client_id, p_queue_id: queueId, p_estimated_cost: estimatedCost });
   if (reservationError || !reservation) return json({ error: "agent_gate_denied" }, 409);
-  if (reservation.replayed) {
-    const { data: existing } = await db.rpc("hml_agent_invocation_snapshot_service", {
-      p_user: auth.user.id, p_invocation: reservation.id,
-    });
-    return json({ replayed: true, invocation: existing ?? { id: reservation.id, status: reservation.status }, retryAllowed: false });
-  }
-
+  if (reservation.replayed) { const { data: existing } = await db.rpc("hml_agent_invocation_snapshot_service", { p_user: auth.user.id, p_invocation: reservation.id }); return json({ replayed: true, invocation: existing ?? { id: reservation.id, status: reservation.status }, retryAllowed: false }); }
   try {
     const files = await trustedPdfInputs(queue, agentCode);
-    const effectiveContent = files.length > 0
-      ? {
-          ...(input.content ?? {}),
-          documentAccess: {
-            mode: "attached_pdf",
-            contentProvidedToModel: true,
-            attachedPdfCount: files.length,
-            filenames: files.map((file) => file.filename),
-            detail: "low",
-            note: "PDFs oficiais privados anexados por URL assinada temporária; leitura textual integral preservada e detalhe visual reduzido para eficiência de tokens.",
-          },
-        }
-      : input.content ?? {};
+    const effectiveContent = files.length > 0 ? { ...(input.content ?? {}), documentAccess: { mode: "attached_pdf", contentProvidedToModel: true, attachedPdfCount: files.length, filenames: files.map((file) => file.filename), detail: "low", note: "PDFs oficiais privados anexados por URL assinada temporária. A leitura deve ser confirmada arquivo a arquivo; falha de OCR/parsing deve ser registrada explicitamente." } } : input.content ?? {};
     const roleInstructions = agentCode === "orchestracao_veence" && files.length > 0 ? `\n\n${ORCHESTRATOR_DOCUMENT_RULES}` : "";
-    const response = await callAgentGateway({
-      model: config.model,
-      instructions: `${config.instructions}\n\n${HML_EVIDENCE_RULES}${roleInstructions}\n\nRetorne somente JSON. Preserve evidências, incertezas e limites do seu papel.`,
-      content: effectiveContent,
-      files,
-      maxOutputTokens: config.max_output_tokens,
-      timeoutMs: config.timeout_ms,
-    });
-    const completedAudit = {
-      agentCode, modelRequested: config.model, modelActual: response.modelActual,
-      providerMetadata: response.providerMetadata, totalTokens: response.totalTokens,
-      transport: response.transport, attachedPdfCount: response.attachedPdfCount,
-    };
-    const { data: persisted, error: persistError } = await db.rpc("hml_complete_agent_invocation_service", {
-      p_invocation: reservation.id,
-      p_provider_request_id: response.requestId,
-      p_input_tokens: response.inputTokens,
-      p_output_tokens: response.outputTokens,
-      p_reported_cost: response.reportedCostUsd,
-      p_result: response.parsed,
-      p_audit: completedAudit,
-    });
+    const response = await callAgentGateway({ model: config.model, instructions: `${config.instructions}\n\n${HML_EVIDENCE_RULES}${roleInstructions}\n\nRetorne somente JSON. Preserve evidências, incertezas e limites do seu papel.`, content: effectiveContent, files, maxOutputTokens: config.max_output_tokens, timeoutMs: config.timeout_ms });
+    const completedAudit = { agentCode, modelRequested: config.model, modelActual: response.modelActual, providerMetadata: response.providerMetadata, totalTokens: response.totalTokens, transport: response.transport, attachedPdfCount: response.attachedPdfCount };
+    const { data: persisted, error: persistError } = await db.rpc("hml_complete_agent_invocation_service", { p_invocation: reservation.id, p_provider_request_id: response.requestId, p_input_tokens: response.inputTokens, p_output_tokens: response.outputTokens, p_reported_cost: response.reportedCostUsd, p_result: response.parsed, p_audit: completedAudit });
     if (persistError || persisted !== true) return json({ error: "persistence_unconfirmed", invocationId: reservation.id, retryAllowed: false }, 500);
-    return json({ ok: true, status: "completed", invocationId: reservation.id, agentCode,
-      model: response.modelActual, costUsd: response.reportedCostUsd, inputTokens: response.inputTokens,
-      outputTokens: response.outputTokens, result: response.parsed, transport: response.transport,
-      attachedPdfCount: response.attachedPdfCount, retryAllowed: false });
-  } catch (error) {
-    const ambiguous = error instanceof AgentGatewayError ? error.ambiguous === true : false;
-    await db.rpc("hml_fail_agent_invocation_service", {
-      p_invocation: reservation.id, p_error: errorText(error), p_ambiguous: ambiguous,
-      p_audit: { agentCode, errorClass: error instanceof AgentGatewayError ? error.errorClass : "unknown_error" },
-    });
-    return json({ error: errorText(error), invocationId: reservation.id, ambiguous, retryAllowed: false }, 500);
-  }
+    return json({ ok: true, status: "completed", invocationId: reservation.id, agentCode, model: response.modelActual, costUsd: response.reportedCostUsd, inputTokens: response.inputTokens, outputTokens: response.outputTokens, result: response.parsed, transport: response.transport, attachedPdfCount: response.attachedPdfCount, retryAllowed: false });
+  } catch (error) { const ambiguous = error instanceof AgentGatewayError ? error.ambiguous === true : false; await db.rpc("hml_fail_agent_invocation_service", { p_invocation: reservation.id, p_error: errorText(error), p_ambiguous: ambiguous, p_audit: { agentCode, errorClass: error instanceof AgentGatewayError ? error.errorClass : "unknown_error" } }); return json({ error: errorText(error), invocationId: reservation.id, ambiguous, retryAllowed: false }, 500); }
 });
