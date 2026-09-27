@@ -13,14 +13,26 @@ test('full tender workflow delegates domain roles in deterministic order', () =>
   assert.equal(plan.steps.at(-1).mode, 'local');
   assert.equal(plan.maxCalls, 8);
   assert.equal(plan.maxCostUsd, 0.32);
+  assert.equal(plan.gateReady, true);
+  assert.equal(plan.executionReady, true);
   assert.equal(plan.ready, true);
   assert.equal(plan.humanFinalDecision, true);
   assert.equal(plan.externalWritesAllowed, false);
 });
 
-test('disabled required agent keeps workflow fail-closed', () => {
+test('disabled required agent permits gate preparation but keeps execution fail-closed', () => {
   const disabled = catalog.map((agent) => agent.code === 'auditoria' ? { ...agent, enabled: false } : agent);
-  assert.equal(buildAgentPlan('triagem', disabled).ready, false);
+  const plan = buildAgentPlan('triagem', disabled);
+  assert.equal(plan.gateReady, true);
+  assert.equal(plan.executionReady, false);
+  assert.equal(plan.ready, false);
+});
+
+test('missing model blocks gate preparation', () => {
+  const unconfigured = catalog.map((agent) => agent.code === 'auditoria' ? { ...agent, model: null } : agent);
+  const plan = buildAgentPlan('triagem', unconfigured);
+  assert.equal(plan.gateReady, false);
+  assert.equal(plan.executionReady, false);
 });
 
 test('unknown workflows are rejected and supported list is explicit', () => {
