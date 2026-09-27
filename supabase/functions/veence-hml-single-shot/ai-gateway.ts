@@ -1,3 +1,5 @@
+import { normalizeGatewayPayload } from "./normalize.mjs";
+
 export type GatewayErrorClass =
   | "ai_gateway_auth_missing"
   | "ai_gateway_timeout"
@@ -47,47 +49,6 @@ function envInt(name: string, fallback: number) {
 function reasoningEffort() {
   const configured = (Deno.env.get("VEENCE_AI_REASONING_EFFORT") || "low").trim().toLowerCase();
   return REASONING_EFFORTS.has(configured) ? configured : "low";
-}
-
-function losslessText(value: unknown, fallback = ""): string {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
-  try {
-    const serialized = JSON.stringify(value);
-    return serialized === undefined ? fallback : serialized;
-  } catch {
-    return fallback;
-  }
-}
-
-export function normalizeGatewayPayload(input: Record<string, unknown>): Record<string, unknown> {
-  const normalized: Record<string, unknown> = { ...input };
-
-  for (const key of ["blockers", "warnings"] as const) {
-    const value = input[key];
-    normalized[key] = Array.isArray(value)
-      ? value.slice(0, 100).map((item) => losslessText(item)).filter((item) => item.length > 0)
-      : [];
-  }
-
-  const evidence = input.evidence;
-  normalized.evidence = Array.isArray(evidence)
-    ? evidence.slice(0, 50).map((item) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) {
-          return { source: "AI", locator: null, finding: losslessText(item) };
-        }
-        const record = item as Record<string, unknown>;
-        return {
-          ...record,
-          source: losslessText(record.source, "AI") || "AI",
-          locator: record.locator === null || record.locator === undefined ? null : losslessText(record.locator),
-          finding: losslessText(record.finding ?? record.description ?? record.message ?? record.text ?? record),
-        };
-      })
-    : [];
-
-  return normalized;
 }
 
 export function classifyGatewayStatus(status: number): GatewayError {
