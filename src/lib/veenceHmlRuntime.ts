@@ -1,6 +1,7 @@
 import { currentHmlIdentity, type HmlAuth, type HmlTransport } from "./veenceHmlSession.ts";
 
-type RuntimeAction = "status" | "authorize_mock" | "run_mock" | "revoke_mock";
+type RuntimeAction = "status" | "authorize_mock" | "run_mock" | "revoke_mock" |
+  "authorize_real" | "run_real" | "revoke_real";
 type RuntimeTransport = Pick<HmlTransport, "invoke">;
 
 export async function hmlRuntimeRequest(
@@ -13,7 +14,8 @@ export async function hmlRuntimeRequest(
   });
   if (response.error) {
     const status = response.error.context?.status;
-    throw new Error(status === 401 ? "session_expired" : status === 403 ? "forbidden" : "runtime_request_failed");
+    throw new Error(status === 401 ? "session_expired" : status === 403 ? "forbidden" :
+      status === 503 ? "runtime_disabled" : "runtime_request_failed");
   }
   return response.data;
 }
