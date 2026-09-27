@@ -26,17 +26,16 @@ Deno.serve(async(request)=>{
   try{return json({plan:buildAgentPlan(String(input.workflow??""),snapshot.agents)});}catch{return json({error:"unknown_workflow",supportedWorkflows},400);}
  }
  if(action==="authorize"){
-  if(!globalAiEnabled)return json({error:"ai_disabled"},503);
   if(!uuid(input.request_key))return json({error:"request_key_required"},400);
   const workflow=String(input.workflow??"");
   let plan;try{plan=buildAgentPlan(workflow,snapshot.agents);}catch{return json({error:"unknown_workflow",supportedWorkflows},400);}
-  if(!plan.ready)return json({error:"agents_not_ready",plan},409);
+  if(!plan.gateReady)return json({error:"agents_not_configured",plan},409);
   if(plan.maxCalls<1||plan.maxCalls>10||plan.maxCostUsd<=0||plan.maxCostUsd>0.50)return json({error:"workflow_budget_invalid",plan},409);
   const{data,error}=await db.rpc("hml_issue_agent_workflow_authorization_v2_service",{
    p_user:auth.user.id,p_queue:queueId,p_request_key:input.request_key,p_workflow:workflow,p_allowed_agents:plan.gatewayAgents,
    p_max_calls:plan.maxCalls,p_max_cost:plan.maxCostUsd,p_ttl_minutes:15,
   });
-  if(error)return json({error:"authorization_failed"},500);return data?json({authorization:data,plan}):json({error:"gate_denied",plan},409);
+  if(error)return json({error:"authorization_failed"},500);return data?json({authorization:data,plan,executionEnabled:globalAiEnabled&&plan.executionReady}):json({error:"gate_denied",plan},409);
  }
  if(action==="revoke"){
   if(!uuid(input.authorization_id))return json({error:"authorization_id_required"},400);
