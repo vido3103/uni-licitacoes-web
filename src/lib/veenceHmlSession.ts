@@ -31,7 +31,7 @@ export async function currentHmlIdentity(auth: HmlAuth, nowSeconds = Math.floor(
 }
 
 export type HmlTransport = {
-  invoke(name: string, options: { body: { queue_id: string }; headers: { Authorization: string } }): Promise<{
+  invoke(name: string, options: { body: Record<string, string>; headers: { Authorization: string } }): Promise<{
     data: unknown;
     error: { message: string; context?: { status?: number } } | null;
   }>;
