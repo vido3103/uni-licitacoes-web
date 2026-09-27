@@ -6,7 +6,7 @@ const S = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(U, S, { auth: { persistSession: false, autoRefreshToken: false } });
 const headers = { "content-type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info" };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers });
-const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const dependencies: Record<string, string[]> = {
   orchestracao_veence: [],
