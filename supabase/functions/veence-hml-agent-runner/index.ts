@@ -11,6 +11,13 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error ?? "unknown_error");
 
+const HML_EVIDENCE_RULES = `Regras obrigatórias de evidência no HML:
+- Metadados de um documento (id, nome, storage path, status available) NÃO significam que o conteúdo do PDF foi lido. Se documentAccess.mode for metadata_only, não atribua ao edital/TR cláusulas, prazos, endereços ou requisitos que não estejam textualmente presentes em outro campo do contexto; marque-os como não lidos/pendentes.
+- estimated_unit_value e estimated_total_value são valores estimados da contratação/órgão. NUNCA os trate como custo de aquisição, cotação de fornecedor ou custo da Luvi.
+- O agente econômico só pode calcular preço/custo quando houver custo de aquisição/cotação de fornecedor explicitamente verificado. Na ausência, informe os parâmetros/fórmulas aplicáveis e bloqueie o cálculo numérico, sem inventar custo.
+- humanFinalDecision=true significa que a decisão final permanece humana; não é, por si só, prova de autorização específica para contato externo. externalWritesAllowed=false proíbe executar ações externas neste fluxo, mas não impede análise consultiva nem a indicação de próximos passos.
+- Preserve a distinção entre evidência fornecida, resultado de agente anterior e inferência. Não promova hipótese ou saída anterior a fato documental.`;
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -70,7 +77,7 @@ Deno.serve(async (request) => {
   try {
     const response = await callAgentGateway({
       model: config.model,
-      instructions: `${config.instructions}\n\nRetorne somente JSON. Preserve evidências, incertezas e limites do seu papel.`,
+      instructions: `${config.instructions}\n\n${HML_EVIDENCE_RULES}\n\nRetorne somente JSON. Preserve evidências, incertezas e limites do seu papel.`,
       content: input.content ?? {},
       maxOutputTokens: config.max_output_tokens,
       timeoutMs: config.timeout_ms,
