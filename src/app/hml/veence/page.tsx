@@ -3,6 +3,13 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { veenceHml } from "@/lib/veenceHmlClient";
 import { hmlRuntimeRequest } from "@/lib/veenceHmlRuntime";
+import {
+  hmlAgentControlStatus,
+  hmlAgentPlan,
+  type HmlAgentControlStatus,
+  type HmlAgentPlan,
+  type HmlWorkflow,
+} from "@/lib/veenceHmlAgentControl";
 
 type Agent = { code: string; version: string; enabled: boolean; model: string | null; provider: string; maxCostUsd: number };
 type Authorization = { id: string; status: string; max_cost_usd: number; max_calls: number; consumed_calls: number; expires_at: string; agent_code: string; flow?: string };
@@ -20,6 +27,15 @@ type Status = {
 
 type CommandAction = "authorize_mock" | "run_mock" | "revoke_mock" | "authorize_real" | "run_real" | "revoke_real";
 
+const WORKFLOW_LABELS: Record<HmlWorkflow, string> = {
+  licitacao_completa: "Licitação completa",
+  radar: "Radar de oportunidades",
+  triagem: "Triagem",
+  habilitacao: "Habilitação",
+  cotacao_e_viabilidade: "Cotação e viabilidade",
+  auditoria_relatorio: "Auditoria e relatório",
+};
+
 export default function VeenceHmlPage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -27,12 +43,33 @@ export default function VeenceHmlPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
+  const [agentControl, setAgentControl] = useState<HmlAgentControlStatus | null>(null);
+  const [workflow, setWorkflow] = useState<HmlWorkflow>("licitacao_completa");
+  const [agentPlan, setAgentPlan] = useState<HmlAgentPlan | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
   const [message, setMessage] = useState("");
   const inFlight = useRef(false);
 
   const loadStatus = useCallback(async () => {
-    const response = await hmlRuntimeRequest(veenceHml.auth, veenceHml.functions, "status");
-    setStatus(response as Status);
+    const [runtime, control] = await Promise.all([
+      hmlRuntimeRequest(veenceHml.auth, veenceHml.functions, "status"),
+      hmlAgentControlStatus(veenceHml.auth, veenceHml.functions),
+    ]);
+    setStatus(runtime as Status);
+    setAgentControl(control);
+  }, []);
+
+  const loadPlan = useCallback(async (selected: HmlWorkflow) => {
+    setPlanBusy(true);
+    try {
+      const plan = await hmlAgentPlan(veenceHml.auth, veenceHml.functions, selected);
+      setAgentPlan(plan);
+    } catch {
+      setAgentPlan(null);
+      setMessage("Não foi possível carregar o plano multiagente. Nenhuma IA foi chamada.");
+    } finally {
+      setPlanBusy(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -50,6 +87,11 @@ export default function VeenceHmlPage() {
     if (!authenticated) return;
     void loadStatus().catch(() => setMessage("Sessão expirada ou acesso HML indisponível. Entre novamente."));
   }, [authenticated, loadStatus]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    void loadPlan(workflow);
+  }, [authenticated, loadPlan, workflow]);
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
@@ -120,11 +162,12 @@ export default function VeenceHmlPage() {
 
   const mockGate = status?.mockAuthorization ?? (status?.authorization?.flow === "mock_orchestration" ? status.authorization : null);
   const realGate = status?.gatewayAuthorization;
+  const supportedWorkflows = agentControl?.supportedWorkflows ?? Object.keys(WORKFLOW_LABELS) as HmlWorkflow[];
 
   return <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
-    <section className="mx-auto max-w-3xl space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6">
+    <section className="mx-auto max-w-4xl space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6">
       <h1 className="text-2xl font-bold">Veence · Homologação isolada</h1>
-      <p className="text-sm text-slate-300">Supabase Auth renova a sessão automaticamente. Mock e inferência real são fluxos separados; nenhuma chamada real ocorre sem autorização específica e confirmação humana.</p>
+      <p className="text-sm text-slate-300">Supabase Auth renova a sessão automaticamente. Mock, planejamento multiagente e inferência real são fluxos separados; visualizar um plano nunca chama IA.</p>
       {!sessionReady ? <p>Verificando sessão…</p> : !authenticated ?
         <form onSubmit={signIn} className="grid gap-3">
           <label>E-mail do usuário HML<input className="mt-1 block w-full rounded p-2 text-slate-900" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
@@ -141,6 +184,31 @@ export default function VeenceHmlPage() {
               <p>Kill switch global: {status.globalAiEnabled ? "habilitado" : "desabilitado"}.</p>
             </div>
 
+            <div className="rounded border border-cyan-500/50 bg-cyan-950/20 p-4">
+              <h2 className="font-bold text-cyan-100">Planejador multiagente · somente visualização</h2>
+              <p className="mt-1 text-slate-300">Escolha o fluxo para ver, antes de qualquer autorização, quais agentes seriam envolvidos, a ordem, o modo de execução e o teto máximo do plano. Esta área não executa inferência.</p>
+              <label className="mt-3 block font-medium">Fluxo
+                <select className="mt-1 block w-full rounded border border-slate-600 bg-slate-950 p-2" value={workflow}
+                  onChange={event => setWorkflow(event.target.value as HmlWorkflow)} disabled={planBusy}>
+                  {supportedWorkflows.map(item => <option key={item} value={item}>{WORKFLOW_LABELS[item] ?? item}</option>)}
+                </select>
+              </label>
+              {planBusy ? <p className="mt-3">Montando plano determinístico…</p> : agentPlan ? <div className="mt-4 space-y-3">
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Chamadas Gateway</strong><br />{agentPlan.maxCalls}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Teto agregado</strong><br />US$ {agentPlan.maxCostUsd.toFixed(2)}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Pronto para real</strong><br />{agentPlan.ready ? "sim" : "não"}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Decisão final</strong><br />humana</p>
+                </div>
+                <ol className="space-y-2">
+                  {agentPlan.steps.map(step => <li key={`${step.order}-${step.code}`} className="rounded border border-slate-700 bg-slate-950/40 p-2">
+                    <strong>{step.order}. {step.code}</strong> · {step.mode === "gateway" ? "AI Gateway" : "local"} · {step.model || "sem modelo"} · teto US$ {step.maxCostUsd.toFixed(2)} · {step.enabled ? "ativo" : "inativo"}
+                  </li>)}
+                </ol>
+                <p className="text-xs text-slate-400">Escrita externa: {agentPlan.externalWritesAllowed ? "permitida" : "bloqueada"}. O plano só poderá ser autorizado para execução real quando todos os agentes Gateway necessários estiverem configurados e ativos, além do kill switch global.</p>
+              </div> : <p className="mt-3 text-amber-200">Plano indisponível. Nenhuma IA foi chamada.</p>}
+            </div>
+
             <div className="rounded border border-slate-700 p-3">
               <h2 className="font-bold">Gate operacional mock</h2>
               <p>Orquestradora Veence · teto US$ 0,00 · 1 execução · validade 30 minutos</p>
@@ -153,7 +221,7 @@ export default function VeenceHmlPage() {
             </div>
 
             <div className="rounded border border-amber-500/60 bg-amber-950/20 p-3">
-              <h2 className="font-bold text-amber-200">Gate de inferência REAL</h2>
+              <h2 className="font-bold text-amber-200">Gate de inferência REAL · chamada única legada</h2>
               <p>AI Gateway · máximo 1 chamada · teto operacional US$ 0,10 · validade 10 minutos · sem retry automático.</p>
               <p>Disponibilidade: {status.realAvailable ? "liberada pelo kill switch" : "bloqueada"}.</p>
               <p>Estado: {realGate?.status || "sem autorização"} · consumidas: {realGate?.consumed_calls ?? 0}/{realGate?.max_calls ?? 1}</p>
@@ -165,7 +233,7 @@ export default function VeenceHmlPage() {
               </div>
             </div>
 
-            <div className="rounded border border-slate-700 p-3"><h2 className="font-bold">Agentes</h2>
+            <div className="rounded border border-slate-700 p-3"><h2 className="font-bold">Catálogo de agentes</h2>
               <ul className="mt-2 grid gap-1 sm:grid-cols-2">{status.agents.map(agent => <li key={agent.code}>{agent.code} · real {agent.enabled ? "ativo" : "inativo"} · {agent.model || "modelo não definido"} · teto US$ {agent.maxCostUsd}</li>)}</ul>
             </div>
             <div className="rounded border border-slate-700 p-3"><h2 className="font-bold">Execução mock e resultado</h2>
