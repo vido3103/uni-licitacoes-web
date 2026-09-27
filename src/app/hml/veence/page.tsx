@@ -6,8 +6,11 @@ import { hmlRuntimeRequest } from "@/lib/veenceHmlRuntime";
 import {
   hmlAgentControlStatus,
   hmlAgentPlan,
+  hmlAuthorizeAgentWorkflow,
+  hmlRevokeAgentWorkflow,
   type HmlAgentControlStatus,
   type HmlAgentPlan,
+  type HmlAgentWorkflowAuthorization,
   type HmlWorkflow,
 } from "@/lib/veenceHmlAgentControl";
 
@@ -36,12 +39,17 @@ const WORKFLOW_LABELS: Record<HmlWorkflow, string> = {
   auditoria_relatorio: "Auditoria e relatório",
 };
 
+function gateExpired(gate: HmlAgentWorkflowAuthorization | null) {
+  return Boolean(gate && new Date(gate.expiresAt).getTime() <= Date.now());
+}
+
 export default function VeenceHmlPage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [agentControl, setAgentControl] = useState<HmlAgentControlStatus | null>(null);
   const [workflow, setWorkflow] = useState<HmlWorkflow>("licitacao_completa");
@@ -139,6 +147,47 @@ export default function VeenceHmlPage() {
     }
   }
 
+  async function prepareAgentWorkflowGate() {
+    if (!agentPlan || controlBusy) return;
+    setControlBusy(true); setMessage("");
+    const requestKey = crypto.randomUUID();
+    sessionStorage.setItem(`veence-hml-agent-workflow-${status?.queue.id}-${workflow}`, requestKey);
+    try {
+      const result = await hmlAuthorizeAgentWorkflow(veenceHml.auth, veenceHml.functions, workflow, requestKey);
+      if (result.authorization.status !== "pending") throw new Error("authorization_not_pending");
+      setMessage(`Gate multiagente preparado para ${WORKFLOW_LABELS[workflow]}. Nenhuma IA foi chamada e nenhuma execução foi iniciada.`);
+      await loadStatus();
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      setMessage(code === "ai_disabled"
+        ? "O kill switch global está bloqueado. O gate multiagente não foi criado e nenhuma IA foi chamada."
+        : code === "agents_not_ready"
+          ? "O plano possui agentes ainda inativos ou sem modelo. O gate não foi criado e nenhuma IA foi chamada."
+          : code === "workflow_budget_invalid"
+            ? "O orçamento do fluxo excede a política HML. O gate não foi criado."
+            : code === "gate_denied"
+              ? "Já existe um gate pendente diferente ou a autorização foi negada. Revise/revogue o gate atual antes de preparar outro."
+              : "Não foi possível preparar o gate multiagente. Nenhuma IA foi chamada.");
+    } finally {
+      setControlBusy(false);
+    }
+  }
+
+  async function revokeAgentWorkflowGate() {
+    const gate = agentControl?.authorization;
+    if (!gate || controlBusy) return;
+    setControlBusy(true); setMessage("");
+    try {
+      await hmlRevokeAgentWorkflow(veenceHml.auth, veenceHml.functions, gate.id);
+      setMessage("Gate multiagente revogado. Nenhuma IA foi chamada.");
+      await loadStatus();
+    } catch {
+      setMessage("Não foi possível revogar o gate multiagente. Atualize o status antes de qualquer ação.");
+    } finally {
+      setControlBusy(false);
+    }
+  }
+
   function authorizeMock() {
     const storageKey = `veence-hml-mock-authorization-${status?.queue.id}`;
     const key = crypto.randomUUID();
@@ -162,12 +211,14 @@ export default function VeenceHmlPage() {
 
   const mockGate = status?.mockAuthorization ?? (status?.authorization?.flow === "mock_orchestration" ? status.authorization : null);
   const realGate = status?.gatewayAuthorization;
+  const workflowGate = agentControl?.authorization ?? null;
+  const workflowGatePending = workflowGate?.status === "pending" && !gateExpired(workflowGate);
   const supportedWorkflows = agentControl?.supportedWorkflows ?? Object.keys(WORKFLOW_LABELS) as HmlWorkflow[];
 
   return <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
     <section className="mx-auto max-w-4xl space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6">
       <h1 className="text-2xl font-bold">Veence · Homologação isolada</h1>
-      <p className="text-sm text-slate-300">Supabase Auth renova a sessão automaticamente. Mock, planejamento multiagente e inferência real são fluxos separados; visualizar um plano nunca chama IA.</p>
+      <p className="text-sm text-slate-300">Supabase Auth renova a sessão automaticamente. Mock, planejamento multiagente, autorização e inferência real são fluxos separados. Preparar um gate não executa IA.</p>
       {!sessionReady ? <p>Verificando sessão…</p> : !authenticated ?
         <form onSubmit={signIn} className="grid gap-3">
           <label>E-mail do usuário HML<input className="mt-1 block w-full rounded p-2 text-slate-900" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
@@ -185,11 +236,11 @@ export default function VeenceHmlPage() {
             </div>
 
             <div className="rounded border border-cyan-500/50 bg-cyan-950/20 p-4">
-              <h2 className="font-bold text-cyan-100">Planejador multiagente · somente visualização</h2>
-              <p className="mt-1 text-slate-300">Escolha o fluxo para ver, antes de qualquer autorização, quais agentes seriam envolvidos, a ordem, o modo de execução e o teto máximo do plano. Esta área não executa inferência.</p>
+              <h2 className="font-bold text-cyan-100">Planejador e gate multiagente</h2>
+              <p className="mt-1 text-slate-300">Escolha o fluxo para revisar agentes, ordem e orçamento. O botão de preparação apenas registra uma autorização auditável por 15 minutos; não chama o AI Gateway e não inicia execução.</p>
               <label className="mt-3 block font-medium">Fluxo
                 <select className="mt-1 block w-full rounded border border-slate-600 bg-slate-950 p-2" value={workflow}
-                  onChange={event => setWorkflow(event.target.value as HmlWorkflow)} disabled={planBusy}>
+                  onChange={event => setWorkflow(event.target.value as HmlWorkflow)} disabled={planBusy || controlBusy}>
                   {supportedWorkflows.map(item => <option key={item} value={item}>{WORKFLOW_LABELS[item] ?? item}</option>)}
                 </select>
               </label>
@@ -197,7 +248,7 @@ export default function VeenceHmlPage() {
                 <div className="grid gap-2 sm:grid-cols-4">
                   <p className="rounded bg-slate-950/60 p-2"><strong>Chamadas Gateway</strong><br />{agentPlan.maxCalls}</p>
                   <p className="rounded bg-slate-950/60 p-2"><strong>Teto agregado</strong><br />US$ {agentPlan.maxCostUsd.toFixed(2)}</p>
-                  <p className="rounded bg-slate-950/60 p-2"><strong>Pronto para real</strong><br />{agentPlan.ready ? "sim" : "não"}</p>
+                  <p className="rounded bg-slate-950/60 p-2"><strong>Pronto para gate</strong><br />{agentPlan.ready && agentControl?.globalAiEnabled ? "sim" : "não"}</p>
                   <p className="rounded bg-slate-950/60 p-2"><strong>Decisão final</strong><br />humana</p>
                 </div>
                 <ol className="space-y-2">
@@ -205,8 +256,25 @@ export default function VeenceHmlPage() {
                     <strong>{step.order}. {step.code}</strong> · {step.mode === "gateway" ? "AI Gateway" : "local"} · {step.model || "sem modelo"} · teto US$ {step.maxCostUsd.toFixed(2)} · {step.enabled ? "ativo" : "inativo"}
                   </li>)}
                 </ol>
-                <p className="text-xs text-slate-400">Escrita externa: {agentPlan.externalWritesAllowed ? "permitida" : "bloqueada"}. O plano só poderá ser autorizado para execução real quando todos os agentes Gateway necessários estiverem configurados e ativos, além do kill switch global.</p>
+                <p className="text-xs text-slate-400">Escrita externa: {agentPlan.externalWritesAllowed ? "permitida" : "bloqueada"}. O gate só pode ser preparado quando todos os agentes Gateway do plano estiverem configurados/ativos e o kill switch global permitir.</p>
+                <button className="rounded bg-cyan-700 p-2 font-semibold disabled:bg-slate-600" disabled={controlBusy || workflowGatePending || !agentPlan.ready || !agentControl?.globalAiEnabled} onClick={() => void prepareAgentWorkflowGate()}>
+                  Preparar gate multiagente · sem executar IA
+                </button>
               </div> : <p className="mt-3 text-amber-200">Plano indisponível. Nenhuma IA foi chamada.</p>}
+
+              <div className="mt-4 rounded border border-cyan-700/60 bg-slate-950/40 p-3">
+                <h3 className="font-bold">Autorização multiagente registrada</h3>
+                {!workflowGate ? <p className="mt-1">Nenhum gate registrado.</p> : <div className="mt-1 space-y-1">
+                  <p>Estado: {workflowGate.status}{gateExpired(workflowGate) ? " · expirado" : ""}</p>
+                  <p>Fluxo autorizado: {workflowGate.workflow ? WORKFLOW_LABELS[workflowGate.workflow] : "legado/sem identificação de fluxo"}</p>
+                  <p>Agentes autorizados: {workflowGate.allowedAgents.join(", ") || "não informado"}</p>
+                  <p>Consumo: {workflowGate.consumedCalls}/{workflowGate.maxCalls} chamadas · reservado US$ {workflowGate.reservedCostUsd.toFixed(2)} de US$ {workflowGate.maxCostUsd.toFixed(2)}</p>
+                  <p>Validade: {new Date(workflowGate.expiresAt).toLocaleString("pt-BR")}</p>
+                  <p>Autorizador: {workflowGate.authorizedBy || status.userId} · Cliente: {workflowGate.clientId || status.clientId} · Fila: {workflowGate.queueId || status.queue.id}</p>
+                  <p className="text-xs text-slate-400">Idempotência: chave UUID registrada no servidor e não exibida na consulta de status. Este painel não possui comando de execução multiagente.</p>
+                  <button className="mt-2 rounded bg-slate-700 p-2 disabled:bg-slate-600" disabled={controlBusy || workflowGate.status !== "pending"} onClick={() => void revokeAgentWorkflowGate()}>Revogar gate multiagente</button>
+                </div>}
+              </div>
             </div>
 
             <div className="rounded border border-slate-700 p-3">
