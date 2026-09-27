@@ -69,16 +69,25 @@ export default function VeenceHmlPage() {
     inFlight.current = true; setBusy(true); setMessage("");
     try {
       const result = await hmlRuntimeRequest(veenceHml.auth, veenceHml.functions, action, data);
-      if (action === "authorize_mock") setMessage("Autorização mock registrada. Nenhuma IA foi chamada.");
+      if (action === "authorize_mock") {
+        const authorization = (result as { authorization?: { status?: string } }).authorization;
+        if (authorization?.status !== "pending") throw new Error("authorization_not_pending");
+        setMessage("Autorização mock registrada. Nenhuma IA foi chamada.");
+      }
       else if (action === "revoke_mock" || action === "revoke_real") setMessage("Autorização revogada.");
       else if (action === "run_mock") setMessage(`Simulação concluída: ${JSON.stringify(result)}. Decisão sujeita a revisão humana.`);
-      else if (action === "authorize_real") setMessage("Autorização REAL registrada por 10 minutos. Nenhuma inferência foi feita ainda.");
+      else if (action === "authorize_real") {
+        const authorization = (result as { authorization?: { status?: string } }).authorization;
+        if (authorization?.status !== "pending") throw new Error("authorization_not_pending");
+        setMessage("Autorização REAL registrada por 10 minutos. Nenhuma inferência foi feita ainda.");
+      }
       else setMessage(`Execução real finalizada sem repetição automática: ${JSON.stringify(result)}. Confira resultado e auditoria.`);
     } catch (error) {
       const text = error instanceof Error ? error.message : "";
       setMessage(/session|login|refresh/.test(text)
         ? "A sessão expirou antes do envio. Entre novamente; nenhuma repetição automática foi feita."
         : text === "runtime_disabled" ? "IA global está bloqueada pelo kill switch. Nenhuma inferência foi feita."
+        : text === "authorization_not_pending" ? "A autorização não ficou pendente. Nenhuma inferência foi feita; atualize o status antes de continuar."
         : "A operação não foi confirmada. Verifique status e auditoria antes de qualquer nova ação; não repita automaticamente.");
     } finally {
       setBusy(false); inFlight.current = false;
@@ -88,15 +97,15 @@ export default function VeenceHmlPage() {
 
   function authorizeMock() {
     const storageKey = `veence-hml-mock-authorization-${status?.queue.id}`;
-    let key = sessionStorage.getItem(storageKey);
-    if (!key || status?.mockAuthorization?.status === "revoked") { key = crypto.randomUUID(); sessionStorage.setItem(storageKey, key); }
+    const key = crypto.randomUUID();
+    sessionStorage.setItem(storageKey, key);
     void command("authorize_mock", { request_key: key });
   }
 
   function authorizeReal() {
     const storageKey = `veence-hml-real-authorization-${status?.queue.id}`;
-    let key = sessionStorage.getItem(storageKey);
-    if (!key || status?.gatewayAuthorization?.status === "revoked") { key = crypto.randomUUID(); sessionStorage.setItem(storageKey, key); }
+    const key = crypto.randomUUID();
+    sessionStorage.setItem(storageKey, key);
     void command("authorize_real", { request_key: key });
   }
 
