@@ -24,6 +24,8 @@ export type HmlAgentPlan = {
   gatewayAgents: string[];
   maxCalls: number;
   maxCostUsd: number;
+  gateReady: boolean;
+  executionReady: boolean;
   ready: boolean;
   humanFinalDecision: boolean;
   externalWritesAllowed: boolean;
@@ -161,10 +163,11 @@ export async function hmlAuthorizeAgentWorkflow(
   const response = await request(auth, transport, "authorize", { workflow, request_key: requestKey }) as {
     authorization?: unknown;
     plan?: HmlAgentPlan;
+    executionEnabled?: boolean;
   };
   const authorization = normalizeAuthorization(response.authorization);
   if (!authorization || !response.plan) throw new Error("authorization_not_pending");
-  return { authorization, plan: response.plan };
+  return { authorization, plan: response.plan, executionEnabled: response.executionEnabled === true };
 }
 
 export async function hmlRevokeAgentWorkflow(
