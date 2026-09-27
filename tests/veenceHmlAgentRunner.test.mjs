@@ -9,10 +9,11 @@ const gateway = readFileSync(new URL('../supabase/functions/veence-hml-agent-run
 test('real agent runner is fail-closed before reservation and provider call', () => {
   const killSwitch = runner.indexOf('VEENCE_AI_ENABLED');
   const enabledCheck = runner.indexOf('config.enabled !== true');
+  const documentPreflight = runner.indexOf('trustedPdfInputs(queue, agentCode)');
   const reservation = runner.indexOf('hml_reserve_authorized_agent_invocation_service');
   const provider = runner.indexOf('callAgentGateway({');
   assert.ok(killSwitch >= 0 && enabledCheck > killSwitch);
-  assert.ok(reservation > enabledCheck);
+  assert.ok(documentPreflight > enabledCheck && reservation > documentPreflight);
   assert.ok(provider > reservation);
 });
 
@@ -24,9 +25,9 @@ test('real agent runner is single-attempt and durable-idempotent', () => {
   assert.doesNotMatch(gateway, /fallback/i);
 });
 
-test('gateway keeps safe reasoning-output headroom and persists reported cost metadata', () => {
+test('gateway keeps bounded reasoning-output headroom and persists reported cost metadata', () => {
   assert.match(gateway, /Math\.min\(Number\(timeoutMs\) \|\| 120000, 120000\)/);
-  assert.match(gateway, /Math\.max\(8192, Math\.min\(Number\(maxOutputTokens\) \|\| 8192, 8192\)\)/);
+  assert.match(gateway, /Math\.max\(1024, Math\.min\(Number\.isFinite\(requestedTokens\) \? requestedTokens : 4096, 4096\)\)/);
   assert.match(gateway, /Produza JSON compacto e objetivo/);
   assert.match(gateway, /reasoningTokens/);
   assert.match(gateway, /finishReason/);
@@ -40,12 +41,15 @@ test('post-run evidence hardening prevents estimate-as-cost and false PDF-read c
   assert.match(runner, /NUNCA os trate como custo de aquisição/);
   assert.match(runner, /documentAccess\.mode for metadata_only/);
   assert.match(runner, /externalWritesAllowed=false proíbe executar ações externas/);
+  assert.match(runner, /mandatoryEditalAttachment: true/);
+  assert.match(runner, /integralReadRequired: true/);
+  assert.match(runner, /assessDocumentRead/);
 });
 
 test('official PDFs are signed server-side and attached only once to orchestration', () => {
   assert.match(runner, /agentCode !== "orchestracao_veence"/);
   assert.match(runner, /opportunity_documents/);
-  assert.match(runner, /createSignedUrl\(row\.storage_path, PDF_URL_TTL_SECONDS\)/);
+  assert.match(runner, /createSignedUrl\(String\(row\.storage_path\), PDF_URL_TTL_SECONDS\)/);
   assert.match(runner, /mode: "attached_pdf"/);
   assert.match(runner, /detail: "low"/);
   assert.match(runner, /ORCHESTRATOR_DOCUMENT_RULES/);
