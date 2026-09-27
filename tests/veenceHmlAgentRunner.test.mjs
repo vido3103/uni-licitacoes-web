@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const runner = readFileSync(new URL('../supabase/functions/veence-hml-agent-runner/index.ts', import.meta.url), 'utf8');
+const workflowRunner = readFileSync(new URL('../supabase/functions/veence-hml-agent-workflow-runner/index.ts', import.meta.url), 'utf8');
 const gateway = readFileSync(new URL('../supabase/functions/veence-hml-agent-runner/gateway.mjs', import.meta.url), 'utf8');
 
 test('real agent runner is fail-closed before reservation and provider call', () => {
@@ -32,4 +33,20 @@ test('gateway keeps safe reasoning-output headroom and persists reported cost me
   assert.match(gateway, /reportedCostUsd/);
   assert.match(runner, /hml_complete_agent_invocation_service/);
   assert.match(runner, /hml_fail_agent_invocation_service/);
+});
+
+test('post-run evidence hardening prevents estimate-as-cost and false PDF-read claims', () => {
+  assert.match(runner, /estimated_unit_value e estimated_total_value são valores estimados/);
+  assert.match(runner, /NUNCA os trate como custo de aquisição/);
+  assert.match(runner, /documentAccess\.mode for metadata_only/);
+  assert.match(runner, /externalWritesAllowed=false proíbe executar ações externas/);
+});
+
+test('workflow preserves role-relevant upstream results and gives audit the full chain', () => {
+  assert.match(workflowRunner, /upstreamAgentResults/);
+  assert.match(workflowRunner, /auditoria:\s*\["orchestracao_veence", "triagem", "habilitacao", "produtos", "suprimentos", "logistica", "economico"\]/);
+  assert.match(workflowRunner, /documentAccess:\s*\{/);
+  assert.match(workflowRunner, /mode:\s*"metadata_only"/);
+  assert.match(workflowRunner, /versions:\s*context\.versions/);
+  assert.match(workflowRunner, /workflow_step_context_too_large/);
 });
