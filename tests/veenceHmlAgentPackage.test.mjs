@@ -5,6 +5,8 @@ import test from 'node:test';
 const packageSql = readFileSync(new URL('../supabase/hml/011_agent_package_v1.sql', import.meta.url), 'utf8');
 const gateSql = readFileSync(new URL('../supabase/hml/012_agent_workflow_gate.sql', import.meta.url), 'utf8');
 const workflowIdentitySql = readFileSync(new URL('../supabase/hml/015_agent_workflow_identity.sql', import.meta.url), 'utf8');
+const releaseSql = readFileSync(new URL('../supabase/hml/016_agent_human_execution_release.sql', import.meta.url), 'utf8');
+const snapshotHardeningSql = readFileSync(new URL('../supabase/hml/017_agent_release_snapshot_hardening.sql', import.meta.url), 'utf8');
 const controlFunction = readFileSync(new URL('../supabase/functions/veence-hml-agent-control/index.ts', import.meta.url), 'utf8');
 
 test('agent package is configured but remains fail-closed', () => {
@@ -36,5 +38,22 @@ test('human authorization is bound to the exact selected workflow', () => {
   assert.match(workflowIdentitySql, /a\.workflow is distinct from p_workflow/i);
   assert.match(workflowIdentitySql, /hml_issue_agent_workflow_authorization_v2_service/i);
   assert.match(controlFunction, /p_workflow:workflow/i);
+});
+
+test('real multi-agent reservation requires a second explicit human release', () => {
+  assert.match(releaseSql, /execution_released_by uuid references auth\.users/i);
+  assert.match(releaseSql, /execution_released_at timestamptz/i);
+  assert.match(releaseSql, /release_request_key uuid/i);
+  assert.match(releaseSql, /a\.execution_released_at is null or a\.execution_released_by<>p_user/i);
+  assert.match(releaseSql, /agent\.enabled is distinct from true/i);
+  assert.match(releaseSql, /hml_release_agent_workflow_authorization_service/i);
+  assert.match(controlFunction, /if\(action==="release"\)/i);
   assert.match(controlFunction, /if\(!globalAiEnabled\)return json\(\{error:"ai_disabled"\}/i);
+  assert.match(controlFunction, /if\(!plan\.executionReady\)return json\(\{error:"agents_not_active"/i);
+});
+
+test('release idempotency key never leaves the service-role snapshot boundary', () => {
+  assert.match(snapshotHardeningSql, /- 'request_key' - 'release_request_key'/i);
+  assert.match(releaseSql, /revoke all on function public\.hml_release_agent_workflow_authorization_service[\s\S]*from public,anon,authenticated/i);
+  assert.match(releaseSql, /grant execute on function public\.hml_release_agent_workflow_authorization_service[\s\S]*to service_role/i);
 });
