@@ -154,8 +154,21 @@ export async function hmlAgentControlStatus(auth: HmlAuth, transport: AgentContr
 }
 
 export async function hmlAgentPlan(auth: HmlAuth, transport: AgentControlTransport, workflow: HmlWorkflow) {
-  const response = await request(auth, transport, "plan", { workflow });
-  return (response as { plan: HmlAgentPlan }).plan;
+  // O plano é apenas leitura de controle: não chama IA, não reserva custo e não consome gate.
+  // Uma única repetição curta é permitida para absorver falha transitória 5xx do Edge Runtime.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await request(auth, transport, "plan", { workflow });
+      return (response as { plan: HmlAgentPlan }).plan;
+    } catch (error) {
+      lastError = error;
+      const code = error instanceof Error ? error.message : "";
+      if (attempt > 0 || !["agent_control_request_failed", "control_unavailable"].includes(code)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("agent_control_request_failed");
 }
 
 export async function hmlAuthorizeAgentWorkflow(
