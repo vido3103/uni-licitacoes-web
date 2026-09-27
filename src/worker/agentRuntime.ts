@@ -59,12 +59,15 @@ export async function runAgentOnce(
   }
   if (!request.invocationKey || !request.clientId || !request.queueId) throw new Error("invalid_identity");
   if (!(await store.reserve(request.invocationKey, agent, request))) throw new Error("invocation_already_reserved");
+  let response: AgentResponse;
   try {
-    const response = await provider.infer(agent, request);
-    await store.finish(request.invocationKey, response);
-    return response;
+    response = await provider.infer(agent, request);
   } catch (error) {
     await store.fail(request.invocationKey, error);
     throw error;
   }
+  // A storage failure after a provider response is ambiguous; keep the durable
+  // reservation, and never represent it as a provider failure or retry it.
+  await store.finish(request.invocationKey, response);
+  return response;
 }
