@@ -12,8 +12,9 @@ export class GatewayError extends Error {
     public readonly retryable: boolean,
     public readonly ambiguous: boolean,
     public readonly status?: number,
+    public readonly diagnostic?: Record<string, unknown>,
   ) {
-    super(errorClass);
+    super(diagnostic ? `${errorClass}:${JSON.stringify(diagnostic)}` : errorClass);
     this.name = "GatewayError";
   }
 }
@@ -32,11 +33,18 @@ export type GatewayResult = {
 };
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+const MIN_OUTPUT_TOKENS = 4_096;
 const GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
+const REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
 
 function envInt(name: string, fallback: number) {
   const parsed = Number(Deno.env.get(name));
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function reasoningEffort() {
+  const configured = (Deno.env.get("VEENCE_AI_REASONING_EFFORT") || "low").trim().toLowerCase();
+  return REASONING_EFFORTS.has(configured) ? configured : "low";
 }
 
 export function classifyGatewayStatus(status: number): GatewayError {
@@ -74,7 +82,12 @@ export async function callAiGateway(messages: unknown[]): Promise<GatewayResult>
     .map((v) => v.trim())
     .filter(Boolean);
   const timeoutMs = envInt("VEENCE_AI_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
-  const maxTokens = envInt("VEENCE_AI_MAX_OUTPUT_TOKENS", 900);
+  // GPT-5-family reasoning tokens count against the output-token budget. The old
+  // 900-token cap could be exhausted by reasoning alone and yield HTTP 200 with
+  // empty assistant content. Keep HML above a safe floor while the operational
+  // gate remains the authoritative cost/call limiter.
+  const maxTokens = Math.max(envInt("VEENCE_AI_MAX_OUTPUT_TOKENS", MIN_OUTPUT_TOKENS), MIN_OUTPUT_TOKENS);
+  const effort = reasoningEffort();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -90,7 +103,7 @@ export async function callAiGateway(messages: unknown[]): Promise<GatewayResult>
         ...(fallbacks.length ? { models: fallbacks } : {}),
         messages,
         stream: false,
-        temperature: 0.1,
+        reasoning: { effort },
         max_tokens: maxTokens,
         response_format: { type: "json_object" },
       }),
@@ -101,14 +114,31 @@ export async function callAiGateway(messages: unknown[]): Promise<GatewayResult>
     const body = await response.json().catch(() => null) as any;
     const text = body?.choices?.[0]?.message?.content;
     if (typeof text !== "string" || !text.trim()) {
-      throw new GatewayError("ai_gateway_empty_response", false, false);
+      const diagnostic = {
+        request_id: response.headers.get("x-request-id") || body?.id || null,
+        model_requested: model,
+        model_actual: typeof body?.model === "string" ? body.model : null,
+        finish_reason: body?.choices?.[0]?.finish_reason ?? null,
+        prompt_tokens: Number.isFinite(body?.usage?.prompt_tokens) ? body.usage.prompt_tokens : null,
+        completion_tokens: Number.isFinite(body?.usage?.completion_tokens) ? body.usage.completion_tokens : null,
+        reasoning_tokens: Number.isFinite(body?.usage?.completion_tokens_details?.reasoning_tokens)
+          ? body.usage.completion_tokens_details.reasoning_tokens
+          : null,
+        max_output_tokens: maxTokens,
+        reasoning_effort: effort,
+      };
+      throw new GatewayError("ai_gateway_empty_response", false, false, undefined, diagnostic);
     }
 
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
     } catch {
-      throw new GatewayError("ai_gateway_invalid_response", false, false);
+      throw new GatewayError("ai_gateway_invalid_response", false, false, undefined, {
+        request_id: response.headers.get("x-request-id") || body?.id || null,
+        model_actual: typeof body?.model === "string" ? body.model : null,
+        finish_reason: body?.choices?.[0]?.finish_reason ?? null,
+      });
     }
 
     return {
