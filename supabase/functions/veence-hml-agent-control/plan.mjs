@@ -22,13 +22,17 @@ export function buildAgentPlan(workflow, catalog) {
   });
   const gatewaySteps = steps.filter((step) => step.mode === 'gateway');
   const maxCostUsd = Number(gatewaySteps.reduce((sum, step) => sum + step.maxCostUsd, 0).toFixed(6));
+  const gateReady = gatewaySteps.every((step) => step.configured && step.maxCostUsd > 0);
+  const executionReady = gateReady && gatewaySteps.every((step) => step.enabled);
   return {
     workflow,
     steps,
     gatewayAgents: gatewaySteps.map((step) => step.code),
     maxCalls: gatewaySteps.length,
     maxCostUsd,
-    ready: gatewaySteps.every((step) => step.enabled && step.configured && step.maxCostUsd > 0),
+    gateReady,
+    executionReady,
+    ready: executionReady,
     humanFinalDecision: true,
     externalWritesAllowed: false,
   };
