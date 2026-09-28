@@ -34,6 +34,11 @@ function gatewayMetadata(body) {
     ?? null;
 }
 
+function pdfDetail(file) {
+  const filename = String(file?.filename ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /(^|[^a-z])edital([^a-z]|$)/.test(filename) ? 'high' : 'low';
+}
+
 export async function callAgentGateway({ model, instructions, content, files = [], maxOutputTokens, timeoutMs }) {
   const key = Deno.env.get('AI_GATEWAY_API_KEY') || Deno.env.get('VERCEL_OIDC_TOKEN');
   if (!key) throw new AgentGatewayError('ai_gateway_auth_missing');
@@ -59,7 +64,7 @@ export async function callAgentGateway({ model, instructions, content, files = [
             role: 'user',
             content: [
               { type: 'input_text', text: textContent },
-              ...normalizedFiles.map((file) => ({ type: 'input_file', file_url: file.url, detail: 'low' })),
+              ...normalizedFiles.map((file) => ({ type: 'input_file', file_url: file.url, detail: pdfDetail(file) })),
             ],
           }],
           stream: false,
@@ -100,6 +105,7 @@ export async function callAgentGateway({ model, instructions, content, files = [
       maxOutputTokens: maxTokens,
       transport: useResponses ? 'responses_file_input' : 'chat_completions',
       attachedPdfCount: normalizedFiles.length,
+      pdfDetails: normalizedFiles.map((file) => ({ filename: file.filename ?? null, detail: pdfDetail(file) })),
     };
     if (typeof text !== 'string' || !text.trim()) {
       throw new AgentGatewayError('ai_gateway_empty_response', { diagnostic });
@@ -125,6 +131,7 @@ export async function callAgentGateway({ model, instructions, content, files = [
       providerMetadata: metadata,
       transport: diagnostic.transport,
       attachedPdfCount: normalizedFiles.length,
+      pdfDetails: diagnostic.pdfDetails,
     };
   } catch (error) {
     if (error instanceof AgentGatewayError) throw error;
