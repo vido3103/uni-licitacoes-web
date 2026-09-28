@@ -24,8 +24,14 @@ test('confirma leitura somente com manifest completo de todos os anexos', () => 
   assert.deepEqual(assessDocumentRead({ document_read_complete: true, document_read_manifest: [{ filename: 'Edital.pdf', status: 'complete' }, { filename: 'TR.pdf', status: 'complete' }], document_read_incomplete: [] }, expected), { ok: true, incomplete: [] });
 });
 
-test('falha fechado em OCR/parsing incompleto mesmo se houver alegação genérica de sucesso', () => {
-  const assessed = assessDocumentRead({ document_read_complete: true, document_read_manifest: [{ filename: 'Edital.pdf', status: 'complete' }], traceability: { note: 'initial OCR failed for that file' } }, ['Edital.pdf']);
+test('OCR textual pode falhar sem invalidar leitura visual integral confirmada', () => {
+  const assessed = assessDocumentRead({ document_read_complete: true, document_read_manifest: [{ filename: 'Edital.pdf', status: 'complete', read_mode: 'visual' }], document_read_incomplete: [], traceability: { note: 'initial OCR failed for that file; visual page reading completed' } }, ['Edital.pdf']);
+  assert.deepEqual(assessed, { ok: true, incomplete: [] });
+});
+
+test('falha fechado quando o manifest ou a confirmação integral indicam leitura incompleta', () => {
+  const assessed = assessDocumentRead({ document_read_complete: false, document_read_manifest: [{ filename: 'Edital.pdf', status: 'incomplete', reason: 'page_unavailable' }], document_read_incomplete: ['Edital.pdf:page_unavailable'] }, ['Edital.pdf']);
   assert.equal(assessed.ok, false);
-  assert.ok(assessed.incomplete.includes('document_content_read_failure_reported'));
+  assert.ok(assessed.incomplete.includes('document_read_complete_not_confirmed'));
+  assert.ok(assessed.incomplete.includes('Edital.pdf'));
 });
