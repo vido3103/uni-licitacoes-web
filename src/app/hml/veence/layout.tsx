@@ -1,6 +1,14 @@
+import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 export default function VeenceHmlLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // HML is intentionally available only on non-production Vercel deployments.
+  // This keeps the isolated HML Supabase project and its operational controls
+  // unreachable from the production host even after the branch is promoted.
+  if (process.env.VERCEL_ENV === "production") {
+    notFound();
+  }
+
   return (
     <div className="min-h-screen bg-slate-950">
       <nav className="border-b border-slate-800 bg-slate-950 px-6 py-3 text-sm text-slate-200" aria-label="Navegação HML Veence">
