@@ -8,8 +8,8 @@ const gateway = readFileSync(new URL('../supabase/functions/veence-hml-agent-run
 
 test('real agent runner is fail-closed before reservation and provider call', () => {
   const killSwitch = runner.indexOf('VEENCE_AI_ENABLED');
-  const enabledCheck = runner.indexOf('config.enabled !== true');
-  const documentPreflight = runner.indexOf('trustedPdfInputs(queue, agentCode)');
+  const enabledCheck = runner.search(/config\.enabled\s*!==\s*true/);
+  const documentPreflight = runner.search(/trustedPdfInputs\(queue,\s*agentCode\)/);
   const reservation = runner.indexOf('hml_reserve_authorized_agent_invocation_service');
   const provider = runner.indexOf('callAgentGateway({');
   assert.ok(killSwitch >= 0 && enabledCheck > killSwitch);
@@ -41,16 +41,16 @@ test('post-run evidence hardening prevents estimate-as-cost and false PDF-read c
   assert.match(runner, /NUNCA os trate como custo de aquisição/);
   assert.match(runner, /documentAccess\.mode for metadata_only/);
   assert.match(runner, /externalWritesAllowed=false proíbe executar ações externas/);
-  assert.match(runner, /mandatoryEditalAttachment: true/);
-  assert.match(runner, /integralReadRequired: true/);
+  assert.match(runner, /mandatoryEditalAttachment\s*:\s*true/);
+  assert.match(runner, /integralReadRequired\s*:\s*true/);
   assert.match(runner, /assessDocumentRead/);
 });
 
 test('official PDFs are signed server-side and edital receives high visual detail', () => {
-  assert.match(runner, /agentCode !== "orchestracao_veence"/);
+  assert.match(runner, /agentCode\s*!==\s*"orchestracao_veence"/);
   assert.match(runner, /opportunity_documents/);
-  assert.match(runner, /createSignedUrl\(String\(row\.storage_path\), PDF_URL_TTL_SECONDS\)/);
-  assert.match(runner, /mode: "attached_pdf"/);
+  assert.match(runner, /createSignedUrl\(String\(row\.storage_path\),\s*PDF_URL_TTL_SECONDS\)/);
+  assert.match(runner, /mode\s*:\s*"attached_pdf"/);
   assert.match(runner, /ORCHESTRATOR_DOCUMENT_RULES/);
   assert.match(gateway, /\/v1\/responses/);
   assert.match(gateway, /type: 'input_file'/);
