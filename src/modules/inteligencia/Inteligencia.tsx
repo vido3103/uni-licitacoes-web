@@ -31,7 +31,7 @@ export default function Inteligencia(){
  const total=useMemo(()=>opps.reduce((sum,row)=>sum+valueOf(row),0),[opps]);
  const buyers=useMemo(()=>group(opps,row=>txt(row.buyer_name,"")),[opps]);
  const regions=useMemo(()=>group(opps,row=>[txt(row.city,""),txt(row.state,"")].filter(Boolean).join("/")||""),[opps]);
- const categories=useMemo(()=>group(opps,row=>txt(row.object_text,txt(row.title,"")).split(/[,;\-]/)[0].trim()),[opps]);
+ const categories=useMemo(()=>group(opps,row=>txt(row.object_text,txt(row.title,"")).split(/[,;-]/)[0].trim()),[opps]);
  const withValue=useMemo(()=>opps.filter(row=>valueOf(row)>0).length,[opps]);
  const withDeadline=useMemo(()=>opps.filter(row=>Boolean(row.proposal_deadline)).length,[opps]);
  if(loading)return <div className="p-8 text-sm text-slate-500">Carregando inteligência...</div>;
