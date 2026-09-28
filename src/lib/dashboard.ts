@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { clearActiveOrganizationId, getActiveOrganizationId } from "@/lib/activeOrganization";
 
 export type BackendDashboard={client:{id:string;legal_name:string;display_name:string|null;status:string}|null;summary:Record<string,number|string|null>;pending:Record<string,number|string|null>;opportunities:Array<Record<string,unknown>>;market:Array<Record<string,unknown>>;enrollments:Array<Record<string,unknown>>};
 
@@ -9,11 +10,14 @@ export async function resolveCurrentClientId():Promise<string|null>{
   const{data:auth}=await supabase.auth.getUser();
   if(!auth.user)return null;
 
-  const selected=typeof window!=="undefined"?sessionStorage.getItem("uni-owner-client-id"):null;
+  // O contexto operacional do Owner é definido pelo mesmo helper usado pela UI.
+  // Isso evita que os módulos procurem a chave legada `uni-owner-client-id`
+  // enquanto o seletor atual grava `veence-active-organization-id`.
+  const selected=typeof window!=="undefined"?getActiveOrganizationId():null;
   if(selected){
     const{data,error}=await supabase.from("clients").select("id,status").eq("id",selected).maybeSingle();
     if(!error&&data?.id&&data.status!=="inactive")return String(data.id);
-    sessionStorage.removeItem("uni-owner-client-id");
+    clearActiveOrganizationId();
   }
 
   const{data:memberships,error}=await supabase.from("client_members").select("client_id").eq("user_id",auth.user.id);
