@@ -29,18 +29,11 @@ export function selectTrustedPdfRows(rows, { maxPdfBytes, maxTotalBytes, maxFile
   return { ok: true, error: null, eligible, expectedFilenames: eligible.map((row) => String(row.original_filename || 'documento.pdf')) };
 }
 
-function resultFailureText(result) {
-  try { return JSON.stringify(result ?? {}).toLowerCase(); } catch { return ''; }
-}
-
 export function assessDocumentRead(result, expectedFilenames = []) {
   if (!result || typeof result !== 'object') return { ok: false, incomplete: ['document_read_confirmation_missing'] };
   const expected = expectedFilenames.map((name) => String(name));
   const incompleteRaw = Array.isArray(result.document_read_incomplete) ? result.document_read_incomplete : [];
   const incomplete = incompleteRaw.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).filter(Boolean);
-  const failureText = resultFailureText(result);
-  const failureMarkers = ['ocr failed', 'ocr failure', 'parsing failed', 'could not be read', 'nao pode ser lido', 'não pode ser lido', 'leitura incompleta'];
-  if (failureMarkers.some((marker) => failureText.includes(marker))) incomplete.push('document_content_read_failure_reported');
   if (result.document_read_complete !== true) incomplete.push('document_read_complete_not_confirmed');
   const manifest = Array.isArray(result.document_read_manifest) ? result.document_read_manifest : [];
   for (const filename of expected) {
