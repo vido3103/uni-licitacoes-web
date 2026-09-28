@@ -3,7 +3,6 @@
 import {useEffect,useState} from "react";
 import {supabase} from "@/lib/supabase";
 
-type Row=Record<string,unknown>;
 type QueueRow={id:string;client_id:string;opportunity_id:string;status:string;queued_at:string;attempt_count:number;max_attempts:number};
 type AuthRow={authorization_id:string;queue_id:string;client_id:string;authorized_by:string;max_claims:number;consumed_claims:number;max_cost_usd:number;expires_at:string;status:string;created_at:string;consumed_at:string|null;reason:string|null};
 type Item={queue:QueueRow;client:string;process:string;authorization:AuthRow|null};
