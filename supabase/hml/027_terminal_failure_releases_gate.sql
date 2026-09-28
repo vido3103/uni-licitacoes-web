@@ -1,3 +1,4 @@
+-- HML: terminaliza o gate quando uma invocação reservada falha de forma definitiva.
 create or replace function hml.fail_agent_invocation(
   p_invocation uuid,
   p_error text,
