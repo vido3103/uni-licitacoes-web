@@ -80,7 +80,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     try {
       const normalized = login.trim().toUpperCase();
       if (!normalized.startsWith("UNI-")) {
-        setError("Informe seu usuário UNI. Ex.: UNI-EMPRESA");
+        setError("Informe seu usuário de acesso. Ex.: UNI-EMPRESA");
         return;
       }
       const { data, error: invokeError } = await supabase.functions.invoke(
@@ -110,7 +110,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       setAuthenticated(true);
     } catch {
       setError(
-        "O acesso ao UNI está temporariamente indisponível. Tente novamente.",
+        "O acesso ao Veence está temporariamente indisponível. Tente novamente.",
       );
     } finally {
       setLoading(false);
@@ -153,7 +153,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             "Não foi possível concluir a solicitação.",
         );
       setSuccess(
-        "Solicitação recebida. Após a aprovação do UNI, sua empresa poderá concluir o cadastro e iniciar a operação.",
+        "Solicitação recebida. Após a aprovação do Veence, sua empresa poderá concluir o cadastro e iniciar a operação.",
       );
       setCnpj("");
       setEmail("");
@@ -172,13 +172,13 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   if (!ready)
     return (
       <div className="grid min-h-screen place-items-center bg-[#071525] text-white">
-        <p className="text-sm text-slate-300">Carregando UNI...</p>
+        <p className="text-sm text-slate-300">Carregando Veence...</p>
       </div>
     );
   if (!supabase)
     return (
       <div className="grid min-h-screen place-items-center bg-[#071525] p-6 text-white">
-        <p>UNI indisponível.</p>
+        <p>Veence indisponível.</p>
       </div>
     );
   if (authenticated) return <>{children}</>;
@@ -188,11 +188,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <section className="hidden lg:block">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-xl font-black shadow-xl shadow-blue-950/40">
-              U
+              V
             </div>
             <div>
-              <p className="text-xl font-black tracking-tight">UNI</p>
-              <p className="text-xs font-medium text-slate-400">Licitações</p>
+              <p className="text-xl font-black tracking-tight">VEENCE</p>
+              <p className="text-xs font-medium text-slate-400">V&S NASCIMENTO</p>
             </div>
           </div>
           <p className="mt-16 text-xs font-bold uppercase tracking-[.22em] text-blue-400">
@@ -224,11 +224,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <section className="mx-auto w-full max-w-[460px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-black">
-              U
+              V
             </div>
             <div>
-              <b>UNI</b>
-              <p className="text-xs text-slate-400">Licitações</p>
+              <b>VEENCE</b>
+              <p className="text-xs text-slate-400">V&S NASCIMENTO</p>
             </div>
           </div>
           <div className="rounded-[28px] border border-white/10 bg-white p-7 text-slate-900 shadow-2xl shadow-black/30 sm:p-9">
@@ -241,7 +241,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 {mode === "login"
-                  ? "Entre com seu usuário UNI para continuar."
+                  ? "Entre com seu usuário de acesso para continuar no Veence."
                   : "Crie a solicitação de acesso da empresa. A liberação é feita pelo Owner."}
               </p>
             </div>
@@ -300,7 +300,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
                 </>
               )}
               <label className="block text-xs font-bold text-slate-700">
-                Usuário UNI
+                Usuário de acesso
                 <input
                   autoComplete="username"
                   required
@@ -348,12 +348,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
                 {loading
                   ? "Processando..."
                   : mode === "login"
-                    ? "Entrar no UNI"
+                    ? "Entrar no Veence"
                     : "Solicitar acesso"}
               </button>
             </form>
             <p className="mt-6 text-center text-[10px] font-medium text-slate-400">
-              UNI Licitações · acesso protegido
+              Veence · V&S NASCIMENTO · acesso protegido
             </p>
           </div>
         </section>
