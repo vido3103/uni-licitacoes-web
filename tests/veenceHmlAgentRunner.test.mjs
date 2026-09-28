@@ -46,17 +46,18 @@ test('post-run evidence hardening prevents estimate-as-cost and false PDF-read c
   assert.match(runner, /assessDocumentRead/);
 });
 
-test('official PDFs are signed server-side and attached only once to orchestration', () => {
+test('official PDFs are signed server-side and edital receives high visual detail', () => {
   assert.match(runner, /agentCode !== "orchestracao_veence"/);
   assert.match(runner, /opportunity_documents/);
   assert.match(runner, /createSignedUrl\(String\(row\.storage_path\), PDF_URL_TTL_SECONDS\)/);
   assert.match(runner, /mode: "attached_pdf"/);
-  assert.match(runner, /detail: "low"/);
   assert.match(runner, /ORCHESTRATOR_DOCUMENT_RULES/);
   assert.match(gateway, /\/v1\/responses/);
   assert.match(gateway, /type: 'input_file'/);
   assert.match(gateway, /file_url: file\.url/);
-  assert.match(gateway, /detail: 'low'/);
+  assert.match(gateway, /function pdfDetail/);
+  assert.match(gateway, /\? 'high' : 'low'/);
+  assert.match(gateway, /detail: pdfDetail\(file\)/);
   assert.match(gateway, /store: false/);
 });
 
